@@ -21,5 +21,7 @@ dependencies {
 	nests ploceus.nests(project.nests_build)
 	mappings ploceus.featherMappings(project.feather_build)
 
-	ploceus.dependOsl(project.osl_version)
+	modImplementation "org.lwjgl:lwjgl:3.4.1"
+	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1"
+	modImplementation "org.lwjgl:lwjgl-opengl:3.4.1"
 }

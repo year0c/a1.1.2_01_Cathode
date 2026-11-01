@@ -1,19 +1,18 @@
 {
   "schemaVersion": 1,
   "id": "ornithe-mod",
-  "version": "${version}",
+  "version": "1.0.0",
   "name": "Ornithe Mod",
   "description": "",
   "authors": [],
   "license": "LGPL-3.0",
   "entrypoints": {
     "main": [
-      "io.github.yourusername.ornithe_mod.OrnitheModMod"
+      "io.github.yourusername.ornithe_mod.OrnitheMod"
     ]
   },
+  "mixins": ["ornithe_mod.mixins.json"],
   "depends": {
-    "minecraft": "1.0.0-alpha.1.2.1",
-    "ornithe": "*",
-    "osl": "*"
+    "minecraft": "1.0.0-alpha.1.2.1"
   }
 }   

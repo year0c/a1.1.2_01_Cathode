@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "io.github.yourusername.ornithe_mod.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [],
+  "client": [
+    "lwjgl.DisplayMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}   
