@@ -1,5 +1,19 @@
 {
-	"depends": {
-		"minecraft": "1.0.0-alpha.1.2.1"
-	}
-}
+  "schemaVersion": 1,
+  "id": "ornithe-mod",
+  "version": "${version}",
+  "name": "Ornithe Mod",
+  "description": "",
+  "authors": [],
+  "license": "LGPL-3.0",
+  "entrypoints": {
+    "main": [
+      "io.github.yourusername.ornithe_mod.OrnitheModMod"
+    ]
+  },
+  "depends": {
+    "minecraft": "1.0.0-alpha.1.2.1",
+    "ornithe": "*",
+    "osl": "*"
+  }
+}   

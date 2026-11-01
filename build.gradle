@@ -1,8 +1,8 @@
 plugins {
-	id 'java'
-	id 'net.fabricmc.fabric-loom-remap' version '1.19.3'
-	id 'ploceus' version '1.19.1'
-}
+	id 'fabric-loom' version '1.15.5'   
+	id 'ploceus' version '1.15.9'
+	id 'maven-publish'
+}   
 
 loom {
 	clientOnlyMinecraftJar()
