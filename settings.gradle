@@ -13,6 +13,7 @@ pluginManagement {
             url = 'https://maven.ornithemc.net/snapshots'
         }
         gradlePluginPortal()
+        mavenCentral()
     }
 }   
 

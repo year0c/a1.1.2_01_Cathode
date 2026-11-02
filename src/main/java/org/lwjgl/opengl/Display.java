@@ -70,6 +70,13 @@ public class Display {
             throw new LWJGLException("SDL_GL_CreateContext failed: " + SDLError.SDL_GetError());
         }
 
+        SDLVideo.SDL_GL_MakeCurrent(window, context);
+        if (SDLVideo.SDL_GL_GetCurrentContext() == 0) {
+            SDLVideo.SDL_DestroyWindow(window);
+            SDLInit.SDL_Quit();
+            throw new LWJGLException("GL context not current after MakeCurrent");
+        }
+
         GL.createCapabilities();
         SDLVideo.SDL_GL_SetSwapInterval(1);
         SDLVideo.SDL_ShowWindow(window);
@@ -302,7 +309,7 @@ public class Display {
 
     public static void setInitialBackground(float r, float g, float b) {
         GL11C.glClearColor(r, g, b, 1.0f);
-    }   
+    }
 
     public static boolean wasResized() {
         return false;

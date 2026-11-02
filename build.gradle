@@ -36,6 +36,8 @@ dependencies {
 	runtimeOnly "org.lwjgl:lwjgl-opengl:3.4.1:natives-linux"
 	runtimeOnly "org.lwjgl:lwjgl-opengl:3.4.1:natives-windows"
 	runtimeOnly "org.lwjgl:lwjgl-opengl:3.4.1:natives-macos"
+
+	modImplementation "org.jspecify:jspecify:+"   
 }
 
 configurations.configureEach {
@@ -52,3 +54,12 @@ configurations.configureEach {
         }
     }
 }
+
+def glLibDir = providers.exec {
+    commandLine "find", "/nix/store", "-name", "libGL.so.1", "-print", "-quit"
+}.standardOutput.asText.get().trim()
+def glLibParent = glLibDir.substring(0, glLibDir.lastIndexOf('/'))
+
+tasks.named('runClient') {
+    environment "LD_LIBRARY_PATH", glLibParent + ":" + (System.getenv("LD_LIBRARY_PATH") ?: "")
+}   

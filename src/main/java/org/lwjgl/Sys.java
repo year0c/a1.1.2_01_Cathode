@@ -33,4 +33,5 @@ public class Sys {
     public static void doLoadLibrary(String name) {}
     public static String getPlatform() { return platform; }
     public static String getVersion() { return version; }
+    public static void initialize() {}   
 }   

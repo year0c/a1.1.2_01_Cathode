@@ -300,7 +300,6 @@ public class ContextCapabilities {
     public long glGetInteger64v;
     public long glGetBufferParameteri64v;
     public long glGetInteger64i_v;
-    public GLProfile profile;
 
     public ContextCapabilities() {
         // Set all fields to 1 (non-zero = "function available")
@@ -310,6 +309,5 @@ public class ContextCapabilities {
                 try { f.setLong(this, 1L); } catch (Exception ignored) {}
             }
         }
-        profile = GLProfile.create(new int[]{1, 1});
     }
 }   

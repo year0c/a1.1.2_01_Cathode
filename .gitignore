@@ -5,6 +5,8 @@ build/
 # Minecraft development
 run/
 bin/
+decompiled/
+cfr*
 
 # IDE files
 .idea/
