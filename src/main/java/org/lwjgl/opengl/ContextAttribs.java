@@ -1,11 +1,13 @@
 package org.lwjgl.opengl;
 
 public class ContextAttribs {
-    private int majorVersion = 1, minorVersion = 0;
-    private boolean profileCore = false, forwardCompatible = false;
-    private int flags = 0;
+    private int majorVersion = 1;
+    private int minorVersion = 0;
+    private boolean profileCore = false;
+    private boolean forwardCompatible = false;
 
     public ContextAttribs() {}
+
     public ContextAttribs(int majorVersion, int minorVersion) {
         this.majorVersion = majorVersion;
         this.minorVersion = minorVersion;

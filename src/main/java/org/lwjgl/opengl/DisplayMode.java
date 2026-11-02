@@ -1,7 +1,8 @@
 package org.lwjgl.opengl;
 
 public class DisplayMode {
-    private final int width, height;
+    private final int width;
+    private final int height;
     private final int frequency;
 
     public DisplayMode(int width, int height) {
@@ -20,9 +21,10 @@ public class DisplayMode {
 
     @Override
     public boolean equals(Object o) {
+        if (this == o) return true;
         if (!(o instanceof DisplayMode)) return false;
-        DisplayMode m = (DisplayMode) o;
-        return width == m.width && height == m.height && frequency == m.frequency;
+        DisplayMode that = (DisplayMode) o;
+        return width == that.width && height == that.height && frequency == that.frequency;
     }
 
     @Override

@@ -4,9 +4,10 @@
   "compatibilityLevel": "JAVA_17",
   "mixins": [],
   "client": [
-    "lwjgl.DisplayMixin"
+    "MemoryTrackerMixin",
+    "TextureManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1
   }
-}   
+}

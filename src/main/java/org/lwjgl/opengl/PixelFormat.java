@@ -1,9 +1,15 @@
 package org.lwjgl.opengl;
 
 public class PixelFormat {
-    private int redBits = 8, greenBits = 8, blueBits = 8, alphaBits = 8;
-    private int depthBits = 16, stencilBits = 8;
+    private int redBits = 8;
+    private int greenBits = 8;
+    private int blueBits = 8;
+    private int alphaBits = 8;
+    private int depthBits = 16;
+    private int stencilBits = 8;
     private int samples = 0;
+
+    public PixelFormat() {}
 
     public PixelFormat withRedBits(int bits) { redBits = bits; return this; }
     public PixelFormat withGreenBits(int bits) { greenBits = bits; return this; }
