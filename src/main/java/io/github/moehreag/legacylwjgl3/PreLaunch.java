@@ -1,4 +1,4 @@
-package io.github.yourusername.ornithe_mod.lwjgl3;
+package io.github.moehreag.legacylwjgl3;
 
 public class PreLaunch {
     public static void init() {

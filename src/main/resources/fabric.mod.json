@@ -7,11 +7,9 @@
   "authors": [],
   "license": "LGPL-3.0",
   "entrypoints": {
-    "main": [
-      "io.github.yourusername.ornithe_mod.OrnitheMod"
-    ]
+    "main": []
   },
-  "mixins": ["ornithe_mod.mixins.json"],
+  "mixins": [],
   "depends": {
     "minecraft": "1.0.0-alpha.1.2.1"
   }
