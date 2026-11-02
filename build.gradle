@@ -37,3 +37,18 @@ dependencies {
 	runtimeOnly "org.lwjgl:lwjgl-opengl:3.4.1:natives-windows"
 	runtimeOnly "org.lwjgl:lwjgl-opengl:3.4.1:natives-macos"
 }
+
+configurations.configureEach {
+    resolutionStrategy.dependencySubstitution {
+        all { substitution ->
+            def requested = substitution.requested
+            if (requested instanceof org.gradle.api.artifacts.component.ModuleComponentSelector
+                    && requested.group == "org.lwjgl") {
+                substitution.useTarget(
+                    "${requested.group}:${requested.module}:3.4.1",
+                    "Use LWJGL 3.4.1 in the development environment"
+                )
+            }
+        }
+    }
+}
