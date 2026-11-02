@@ -1,6 +1,8 @@
-package org.lwjgl.opengl;
+package org.lwjglx.opengl;
 
-import org.lwjgl.LWJGLException;
+import org.lwjglx.LWJGLException;
+import org.lwjgl.opengl.GL;
+import org.lwjgl.opengl.GL11C;
 import org.lwjgl.sdl.SDLInit;
 import org.lwjgl.sdl.SDLVideo;
 import org.lwjgl.sdl.SDLEvents;

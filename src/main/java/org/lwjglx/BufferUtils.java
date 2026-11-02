@@ -1,5 +1,6 @@
-package org.lwjgl;
+package org.lwjglx;
 
+import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.Buffer;

@@ -1,4 +1,6 @@
-package org.lwjgl.opengl;
+package org.lwjglx.opengl;
+
+import org.lwjglx.opengl.ContextAttribs;
 
 public class ContextAttribs {
     private int majorVersion = 1;

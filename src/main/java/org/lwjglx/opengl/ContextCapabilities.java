@@ -1,4 +1,4 @@
-package org.lwjgl.opengl;
+package org.lwjglx.opengl;
 
 public class ContextCapabilities {
     public long glGenTextures;

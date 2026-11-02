@@ -1,4 +1,4 @@
-package org.lwjgl;
+package org.lwjglx;
 
 public class LWJGLException extends Exception {
     public LWJGLException() { super(); }

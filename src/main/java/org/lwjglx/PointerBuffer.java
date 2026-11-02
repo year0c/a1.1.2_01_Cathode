@@ -1,9 +1,12 @@
-package org.lwjgl;
+package org.lwjglx;
 
+import org.lwjglx.PointerBuffer;
 import org.lwjgl.system.CustomBuffer;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
+
+import org.jspecify.annotations.Nullable;
 
 public class PointerBuffer extends CustomBuffer<PointerBuffer> {
 
@@ -18,7 +21,7 @@ public class PointerBuffer extends CustomBuffer<PointerBuffer> {
     public int sizeof() { return 8; }
 
     @Override
-    protected PointerBuffer create(long address, ByteBuffer container, int mark, int position, int limit, int capacity) {
+    protected PointerBuffer create(long address, @Nullable ByteBuffer container, int mark, int position, int limit, int capacity) {
         PointerBuffer buf = new PointerBuffer(capacity);
         buf.position(position);
         buf.limit(limit);

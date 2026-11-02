@@ -1,4 +1,6 @@
-package org.lwjgl.opengl;
+package org.lwjglx.opengl;
+
+import org.lwjglx.opengl.DisplayMode;
 
 public class DisplayMode {
     private final int width;

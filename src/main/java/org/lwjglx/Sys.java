@@ -1,4 +1,4 @@
-package org.lwjgl;
+package org.lwjglx;
 
 public class Sys {
     public static String platform = "linux";

@@ -37,7 +37,8 @@ dependencies {
 	runtimeOnly "org.lwjgl:lwjgl-opengl:3.4.1:natives-windows"
 	runtimeOnly "org.lwjgl:lwjgl-opengl:3.4.1:natives-macos"
 
-	modImplementation "org.jspecify:jspecify:+"   
+	modImplementation "org.jspecify:jspecify:+"  
+	modImplementation "org.ow2.asm:asm-commons:+"    
 }
 
 configurations.configureEach {

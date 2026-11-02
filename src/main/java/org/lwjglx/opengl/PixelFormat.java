@@ -1,4 +1,6 @@
-package org.lwjgl.opengl;
+package org.lwjglx.opengl;
+
+import org.lwjglx.opengl.PixelFormat;
 
 public class PixelFormat {
     private int redBits = 8;
