@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "id": "ornithe-mod",
+  "id": "cathode",
   "version": "1.0.0",
-  "name": "Ornithe Mod",
-  "description": "",
-  "authors": [],
+  "name": "Cathode",
+  "description": "LWJGL 3 SDL3 backport for Minecraft Alpha 1.1.2_01",
+  "authors": ["year0c"],
   "license": "LGPL-3.0",
   "entrypoints": {
-    "main": []
+    "main": ["io.github.moehreag.legacylwjgl3.PreLaunch"]
   },
   "mixins": [],
   "depends": {
