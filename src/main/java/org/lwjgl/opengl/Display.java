@@ -41,12 +41,23 @@ public class Display {
             throw new LWJGLException("SDL_Init failed: " + SDLError.SDL_GetError());
         }
 
+        SDLVideo.SDL_GL_SetAttribute(SDLVideo.SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+        SDLVideo.SDL_GL_SetAttribute(SDLVideo.SDL_GL_CONTEXT_MINOR_VERSION, 1);
+        SDLVideo.SDL_GL_SetAttribute(SDLVideo.SDL_GL_DOUBLEBUFFER, 1);
+        if (format != null) {
+            SDLVideo.SDL_GL_SetAttribute(SDLVideo.SDL_GL_RED_SIZE, format.getRedBits());
+            SDLVideo.SDL_GL_SetAttribute(SDLVideo.SDL_GL_GREEN_SIZE, format.getGreenBits());
+            SDLVideo.SDL_GL_SetAttribute(SDLVideo.SDL_GL_BLUE_SIZE, format.getBlueBits());
+            SDLVideo.SDL_GL_SetAttribute(SDLVideo.SDL_GL_ALPHA_SIZE, format.getAlphaBits());
+            SDLVideo.SDL_GL_SetAttribute(SDLVideo.SDL_GL_DEPTH_SIZE, format.getDepthBits());
+            SDLVideo.SDL_GL_SetAttribute(SDLVideo.SDL_GL_STENCIL_SIZE, format.getStencilBits());
+        }
+
         long flags = SDLVideo.SDL_WINDOW_OPENGL | SDLVideo.SDL_WINDOW_HIDDEN;
         if (resizable) flags |= SDLVideo.SDL_WINDOW_RESIZABLE;
         if (fullscreen) flags |= SDLVideo.SDL_WINDOW_FULLSCREEN;
 
         window = SDLVideo.SDL_CreateWindow(title, currentWidth, currentHeight, (int) flags);
-
         if (window == 0) {
             SDLInit.SDL_Quit();
             throw new LWJGLException("SDL_CreateWindow failed: " + SDLError.SDL_GetError());
@@ -290,8 +301,8 @@ public class Display {
     }
 
     public static void setInitialBackground(float r, float g, float b) {
-        GL11.glClearColor(r, g, b, 1.0f);
-    }
+        GL11C.glClearColor(r, g, b, 1.0f);
+    }   
 
     public static boolean wasResized() {
         return false;
