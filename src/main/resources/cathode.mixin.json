@@ -1,8 +1,0 @@
-{
-  "package": "com.cathode.mixin",
-  "mixins": ["WindowGuardMixin"],
-  "compatibilityLevel": "JAVA_21",
-  "injectors": { 
-    "defaultRequire": 1 
-  }
-}   

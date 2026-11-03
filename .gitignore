@@ -8,6 +8,7 @@ bin/
 decompiled/
 cfr*
 libs/
+mod/
 
 # IDE files
 .idea/
