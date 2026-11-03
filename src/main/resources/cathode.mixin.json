@@ -1,0 +1,8 @@
+{
+  "package": "com.cathode.mixin",
+  "mixins": ["MinecraftMixin"],
+  "compatibilityLevel": "JAVA_21",
+  "injectors": {
+    "defaultRequire": 1
+  }
+}   
