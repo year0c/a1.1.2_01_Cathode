@@ -21,6 +21,8 @@ dependencies {
 	nests ploceus.nests(project.nests_build)
 	mappings ploceus.featherMappings(project.feather_build)
 
+	ploceus.dependOsl(project.osl_version)
+
 	modImplementation "org.lwjgl:lwjgl:3.4.1"
 	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1"
 	modImplementation "org.lwjgl:lwjgl-opengl:3.4.1"
@@ -38,7 +40,7 @@ dependencies {
 	runtimeOnly "org.lwjgl:lwjgl-opengl:3.4.1:natives-macos"
 
 	modImplementation "org.jspecify:jspecify:+"  
-	modImplementation "org.ow2.asm:asm-commons:+"    
+	modImplementation "org.ow2.asm:asm-commons:+"
 }
 
 configurations.configureEach {
@@ -64,3 +66,4 @@ def glLibParent = glLibDir.substring(0, glLibDir.lastIndexOf('/'))
 tasks.named('runClient') {
     environment "LD_LIBRARY_PATH", glLibParent + ":" + (System.getenv("LD_LIBRARY_PATH") ?: "")
 }   
+

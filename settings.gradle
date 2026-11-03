@@ -15,6 +15,4 @@ pluginManagement {
         gradlePluginPortal()
         mavenCentral()
     }
-}   
-
-rootProject.name = "ornithe-mod"   
+}

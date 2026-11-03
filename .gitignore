@@ -7,6 +7,7 @@ run/
 bin/
 decompiled/
 cfr*
+libs/
 
 # IDE files
 .idea/
