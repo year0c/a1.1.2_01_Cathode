@@ -65,3 +65,6 @@ tasks.named('runClient') {
     environment "LD_LIBRARY_PATH", glLibParent + ":" + (System.getenv("LD_LIBRARY_PATH") ?: "")
 }   
 
+jar {
+    exclude 'net/minecraft/**'
+}

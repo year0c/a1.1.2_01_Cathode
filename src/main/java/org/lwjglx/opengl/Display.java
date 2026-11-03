@@ -9,10 +9,14 @@ import org.lwjgl.sdl.SDLEvents;
 import org.lwjgl.sdl.SDL_Event;
 import org.lwjgl.sdl.SDLError;
 import org.lwjgl.sdl.SDL_Rect;
+import org.lwjgl.sdl.SDLProperties;
 import org.lwjgl.system.MemoryStack;
 
 import java.awt.Canvas;
+import java.lang.reflect.Field;
 import java.nio.IntBuffer;
+import java.util.HashSet;
+import java.util.Set;
 
 public class Display {
 
@@ -20,11 +24,15 @@ public class Display {
     private static boolean created = false;
     private static boolean fullscreen = false;
     private static boolean resizable = false;
+    private static boolean awtLocked = false;
     private static int currentWidth = 854;
     private static int currentHeight = 480;
     private static DisplayMode currentMode;
     private static DisplayMode desktopMode;
     private static String title = "";
+    private static long nativeHandle = 0;
+    private static Canvas parentCanvas = null;
+    private static final Set<Long> childWindows = new HashSet<>();
 
     // --- Window creation ---
 
@@ -55,14 +63,34 @@ public class Display {
             SDLVideo.SDL_GL_SetAttribute(SDLVideo.SDL_GL_STENCIL_SIZE, format.getStencilBits());
         }
 
-        long flags = SDLVideo.SDL_WINDOW_OPENGL | SDLVideo.SDL_WINDOW_HIDDEN;
-        if (resizable) flags |= SDLVideo.SDL_WINDOW_RESIZABLE;
-        if (fullscreen) flags |= SDLVideo.SDL_WINDOW_FULLSCREEN;
+        if (nativeHandle != 0) {
+            int props = SDLProperties.SDL_CreateProperties();
+            String os = System.getProperty("os.name", "").toLowerCase();
+            if (os.contains("win")) {
+                SDLProperties.SDL_SetPointerProperty(props, "SDL.window.win32.hwnd", nativeHandle);
+            } else if (os.contains("mac")) {
+                SDLProperties.SDL_SetPointerProperty(props, "SDL.window.cocoa.view", nativeHandle);
+            } else {
+                SDLProperties.SDL_SetPointerProperty(props, "SDL.window.x11.id", nativeHandle);
+            }
+            SDLProperties.SDL_SetBooleanProperty(props, "SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN", true);
+            window = SDLVideo.SDL_CreateWindowWithProperties(props);
+            SDLProperties.SDL_DestroyProperties(props);
 
-        window = SDLVideo.SDL_CreateWindow(title, currentWidth, currentHeight, (int) flags);
-        if (window == 0) {
-            SDLInit.SDL_Quit();
-            throw new LWJGLException("SDL_CreateWindow failed: " + SDLError.SDL_GetError());
+            if (window == 0) {
+                SDLInit.SDL_Quit();
+                throw new LWJGLException("SDL_CreateWindowWithProperties failed: " + SDLError.SDL_GetError());
+            }
+        } else {
+            long flags = SDLVideo.SDL_WINDOW_OPENGL | SDLVideo.SDL_WINDOW_HIDDEN;
+            if (resizable) flags |= SDLVideo.SDL_WINDOW_RESIZABLE;
+            if (fullscreen) flags |= SDLVideo.SDL_WINDOW_FULLSCREEN;
+
+            window = SDLVideo.SDL_CreateWindow(title, currentWidth, currentHeight, (int) flags);
+            if (window == 0) {
+                SDLInit.SDL_Quit();
+                throw new LWJGLException("SDL_CreateWindow failed: " + SDLError.SDL_GetError());
+            }
         }
 
         long context = SDLVideo.SDL_GL_CreateContext(window);
@@ -81,18 +109,58 @@ public class Display {
 
         GL.createCapabilities();
         SDLVideo.SDL_GL_SetSwapInterval(1);
-        SDLVideo.SDL_ShowWindow(window);
+        if (nativeHandle == 0) {
+            SDLVideo.SDL_ShowWindow(window);
+        }
         created = true;
     }
 
-    // --- AWT bypass ---
+    // --- Child windows (If you wanna make new windows, use this.) ---
+
+    public static long createChildWindow(String title, int w, int h) throws LWJGLException {
+        long flags = SDLVideo.SDL_WINDOW_OPENGL;   
+        long win = SDLVideo.SDL_CreateWindow(title, w, h, (int) flags);
+        if (win == 0) throw new LWJGLException("SDL_CreateWindow (child) failed: " + SDLError.SDL_GetError());
+        childWindows.add(win);
+        return win;
+    }
+
+    public static void destroyChildWindow(long win) {
+        childWindows.remove(win);
+        if (win != 0) SDLVideo.SDL_DestroyWindow(win);
+    }
+
+    // --- AWT handoff ---
 
     public static void setParent(Canvas parent) throws LWJGLException {
-        // NO-OP: de-AWT'd
+        parentCanvas = parent;
+        nativeHandle = extractNativeHandle(parent);
+        awtLocked = true;
     }
 
     public static Canvas getParent() {
-        return null;
+        return parentCanvas;
+    }
+
+    public static boolean isAwTLocked() {
+        return awtLocked;
+    }
+
+    private static long extractNativeHandle(Canvas canvas) {
+        try {
+            Field peerField = canvas.getClass().getDeclaredField("peer");
+            peerField.setAccessible(true);
+            Object peer = peerField.get(canvas);
+            if (peer != null) {
+                try {
+                    Field handleField = peer.getClass().getDeclaredField("handle");
+                    handleField.setAccessible(true);
+                    long h = handleField.getLong(peer);
+                    if (h != 0) return h;
+                } catch (NoSuchFieldException ignored) {}
+            }
+        } catch (Exception ignored) {}
+        return 0;
     }
 
     // --- Frame loop ---
@@ -104,33 +172,27 @@ public class Display {
         }
     }
 
-    public static void update(boolean processMessages) {
-        update();
-    }
-
-    public static void swapBuffers() {
-        if (window != 0) SDLVideo.SDL_GL_SwapWindow(window);
-    }
-
-    public static void processMessages() {
-        if (window != 0) SDLEvents.SDL_PumpEvents();
-    }
-
-    public static void sync(int fps) {
-        // Handled by SDL_GL_SetSwapInterval
-    }
+    public static void update(boolean processMessages) { update(); }
+    public static void swapBuffers() { if (window != 0) SDLVideo.SDL_GL_SwapWindow(window); }
+    public static void processMessages() { if (window != 0) SDLEvents.SDL_PumpEvents(); }
+    public static void sync(int fps) {}
 
     // --- Window state ---
 
     public static void destroy() {
+        for (long child : childWindows) SDLVideo.SDL_DestroyWindow(child);
+        childWindows.clear();
         if (window != 0) {
-            SDLVideo.SDL_DestroyWindow(window);
+            if (nativeHandle == 0) SDLVideo.SDL_DestroyWindow(window);
             window = 0;
         }
         if (created) {
             SDLInit.SDL_Quit();
             created = false;
         }
+        nativeHandle = 0;
+        parentCanvas = null;
+        awtLocked = false;
     }
 
     public static boolean isCloseRequested() {
@@ -147,38 +209,23 @@ public class Display {
     public static void setTitle(String newTitle) {
         title = newTitle;
         if (window != 0) SDLVideo.SDL_SetWindowTitle(window, newTitle);
-    }
-
-    public static String getTitle() {
-        return title;
-    }
-
-    public static void setVSyncEnabled(boolean enabled) {
-        SDLVideo.SDL_GL_SetSwapInterval(enabled ? 1 : 0);
-    }
-
-    public static void setSwapInterval(int value) {
-        SDLVideo.SDL_GL_SetSwapInterval(value);
-    }
-
-    public static void setResizable(boolean res) {
-        resizable = res;
-    }
-
-    public static boolean isResizable() {
-        return resizable;
-    }
-
-    public static void setFullscreen(boolean fs) throws LWJGLException {
-        fullscreen = fs;
-        if (window != 0) {
-            SDLVideo.SDL_SetWindowFullscreen(window, fs);
+        if (parentCanvas != null && parentCanvas.getParent() instanceof java.awt.Frame f) {
+            f.setTitle(newTitle);
         }
     }
 
-    public static boolean isFullscreen() {
-        return fullscreen;
+    public static String getTitle() { return title; }
+    public static void setVSyncEnabled(boolean enabled) { SDLVideo.SDL_GL_SetSwapInterval(enabled ? 1 : 0); }
+    public static void setSwapInterval(int value) { SDLVideo.SDL_GL_SetSwapInterval(value); }
+    public static void setResizable(boolean res) { resizable = res; }
+    public static boolean isResizable() { return resizable; }
+
+    public static void setFullscreen(boolean fs) throws LWJGLException {
+        fullscreen = fs;
+        if (window != 0) SDLVideo.SDL_SetWindowFullscreen(window, fs);
     }
+
+    public static boolean isFullscreen() { return fullscreen; }
 
     // --- Display modes ---
 
@@ -186,18 +233,14 @@ public class Display {
         currentMode = mode;
         currentWidth = mode.getWidth();
         currentHeight = mode.getHeight();
-        if (window != 0) {
-            SDLVideo.SDL_SetWindowSize(window, currentWidth, currentHeight);
+        if (window != 0) SDLVideo.SDL_SetWindowSize(window, currentWidth, currentHeight);
+        if (parentCanvas != null && parentCanvas.getParent() instanceof java.awt.Frame f) {
+            f.setSize(currentWidth, currentHeight);
         }
     }
 
-    public static void setDisplayModeAndFullscreen(DisplayMode mode) throws LWJGLException {
-        setDisplayMode(mode);
-    }
-
-    public static DisplayMode getDisplayMode() {
-        return currentMode;
-    }
+    public static void setDisplayModeAndFullscreen(DisplayMode mode) throws LWJGLException { setDisplayMode(mode); }
+    public static DisplayMode getDisplayMode() { return currentMode; }
 
     public static DisplayMode getDesktopDisplayMode() {
         if (desktopMode == null) {
@@ -274,38 +317,28 @@ public class Display {
 
     public static boolean isActive() {
         if (window == 0) return false;
-        long flags = SDLVideo.SDL_GetWindowFlags(window);
-        return (flags & SDLVideo.SDL_WINDOW_INPUT_FOCUS) != 0;
+        return (SDLVideo.SDL_GetWindowFlags(window) & SDLVideo.SDL_WINDOW_INPUT_FOCUS) != 0;
     }
 
     public static boolean isVisible() {
         if (window == 0) return false;
-        long flags = SDLVideo.SDL_GetWindowFlags(window);
-        return (flags & SDLVideo.SDL_WINDOW_HIDDEN) == 0;
+        if (nativeHandle != 0) return true;
+        return (SDLVideo.SDL_GetWindowFlags(window) & SDLVideo.SDL_WINDOW_HIDDEN) == 0;
     }
 
-    public static boolean isCreated() {
-        return created;
-    }
-
-    public static boolean isCurrent() {
-        return SDLVideo.SDL_GL_GetCurrentContext() != 0;
-    }
+    public static boolean isCreated() { return created; }
+    public static boolean isCurrent() { return SDLVideo.SDL_GL_GetCurrentContext() != 0; }
 
     public static void makeCurrent() throws LWJGLException {
         if (window != 0) {
             long ctx = SDLVideo.SDL_GL_GetCurrentContext();
-            if (ctx == 0) {
-                ctx = SDLVideo.SDL_GL_CreateContext(window);
-            }
+            if (ctx == 0) ctx = SDLVideo.SDL_GL_CreateContext(window);
             SDLVideo.SDL_GL_MakeCurrent(window, ctx);
         }
     }
 
     public static float getPixelScaleFactor() {
-        if (window != 0) {
-            return SDLVideo.SDL_GetWindowDisplayScale(window);
-        }
+        if (window != 0) return SDLVideo.SDL_GetWindowDisplayScale(window);
         return 1.0f;
     }
 
@@ -313,15 +346,7 @@ public class Display {
         GL11C.glClearColor(r, g, b, 1.0f);
     }
 
-    public static boolean wasResized() {
-        return false;
-    }
-
-    public static Drawable getDrawable() {
-        return null;
-    }
-
-    public static String getVersion() {
-        return "LWJGL 3.4.1 (SDL3 shim)";
-    }
+    public static boolean wasResized() { return false; }
+    public static Drawable getDrawable() { return null; }
+    public static String getVersion() { return "LWJGL 3.4.1 (SDL3 shim)"; }
 }   

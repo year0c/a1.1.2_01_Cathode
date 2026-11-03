@@ -3,7 +3,7 @@
   "id": "cathode",
   "version": "1.0.0",
   "name": "Cathode",
-  "description": "LWJGL 3 SDL3 backport for Minecraft Alpha 1.1.2_01",
+  "description": "LWJGL3 SDL3 rendering for Minecraft Alpha 1.1.2_01",
   "authors": ["year0c"],
   "license": "LGPL-3.0",
   "entrypoints": {
