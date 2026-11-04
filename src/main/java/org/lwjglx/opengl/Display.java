@@ -24,7 +24,6 @@ public class Display {
     private static boolean created = false;
     private static boolean fullscreen = false;
     private static boolean resizable = false;
-    private static boolean awtLocked = false;
     private static int currentWidth = 854;
     private static int currentHeight = 480;
     private static DisplayMode currentMode;
@@ -115,35 +114,26 @@ public class Display {
         created = true;
     }
 
-    // --- Child windows (If you wanna make new windows, use this.) ---
-
-    public static long createChildWindow(String title, int w, int h) throws LWJGLException {
-        long flags = SDLVideo.SDL_WINDOW_OPENGL;   
-        long win = SDLVideo.SDL_CreateWindow(title, w, h, (int) flags);
-        if (win == 0) throw new LWJGLException("SDL_CreateWindow (child) failed: " + SDLError.SDL_GetError());
-        childWindows.add(win);
-        return win;
-    }
-
-    public static void destroyChildWindow(long win) {
-        childWindows.remove(win);
-        if (win != 0) SDLVideo.SDL_DestroyWindow(win);
-    }
-
     // --- AWT handoff ---
 
     public static void setParent(Canvas parent) throws LWJGLException {
         parentCanvas = parent;
         nativeHandle = extractNativeHandle(parent);
-        awtLocked = true;
+
+        if (parent.getParent() instanceof java.awt.Frame f) {
+            String os = System.getProperty("os.name", "").toLowerCase();
+            if (os.contains("mac")) {
+                f.setTitle(" ");
+            } else {
+                f.setUndecorated(true);
+            }
+            f.setBackground(java.awt.Color.BLACK);
+            f.setResizable(true);
+        }
     }
 
     public static Canvas getParent() {
         return parentCanvas;
-    }
-
-    public static boolean isAwTLocked() {
-        return awtLocked;
     }
 
     private static long extractNativeHandle(Canvas canvas) {
@@ -192,7 +182,6 @@ public class Display {
         }
         nativeHandle = 0;
         parentCanvas = null;
-        awtLocked = false;
     }
 
     public static boolean isCloseRequested() {
