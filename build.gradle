@@ -54,6 +54,33 @@ configurations.configureEach {
     }
 }
 
+task compileShaders(type: Exec) {
+    def glslc = System.getenv("VULKAN_SDK") != null
+        ? "${System.getenv('VULKAN_SDK')}/Bin/glslc${System.env.OS == 'Windows_NT' ? '.exe' : ''}"
+        : "glslc"
+
+    inputs.files "src/main/resources/shaders/src/world_vert.glsl",
+                 "src/main/resources/shaders/src/world_frag.glsl"
+    outputs.files "src/main/resources/shaders/world_vert.spv",
+                  "src/main/resources/shaders/world_frag.spv"
+
+    doFirst {
+        delete "src/main/resources/shaders/*.spv"
+    }
+
+    commandLine glslc,
+        "src/main/resources/shaders/src/world_vert.glsl",
+        "-o", "src/main/resources/shaders/world_vert.spv",
+        "src/main/resources/shaders/src/world_frag.glsl",
+        "-o", "src/main/resources/shaders/world_frag.spv"
+}
+
+processResources {
+    dependsOn compileShaders
+}
+
 jar {
     exclude 'net/minecraft/**'
+    include 'net/minecraft/client/render/Tesselator.class'
+    include 'net/minecraft/client/render/world/WorldRenderer.class'
 }   
