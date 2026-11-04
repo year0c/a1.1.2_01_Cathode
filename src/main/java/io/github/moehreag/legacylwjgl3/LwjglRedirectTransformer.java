@@ -40,4 +40,4 @@ public class LwjglRedirectTransformer implements IClassTransformer {
     private static boolean containsRef(byte[] bytes, String ref) {
         return new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1).contains(ref);
     }
-}
+}   

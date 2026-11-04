@@ -1,6 +1,5 @@
 package org.lwjglx;
 
-import org.lwjglx.PointerBuffer;
 import org.lwjgl.system.CustomBuffer;
 import org.lwjgl.system.MemoryUtil;
 
@@ -14,6 +13,10 @@ public class PointerBuffer extends CustomBuffer<PointerBuffer> {
         super(MemoryUtil.nmemAlloc(capacity * 8), null, -1, 0, capacity, capacity);
     }
 
+    protected PointerBuffer(long address, @Nullable ByteBuffer container, int mark, int position, int limit, int capacity) {
+        super(address, container, mark, position, limit, capacity);
+    }
+
     @Override
     protected PointerBuffer self() { return this; }
 
@@ -22,10 +25,7 @@ public class PointerBuffer extends CustomBuffer<PointerBuffer> {
 
     @Override
     protected PointerBuffer create(long address, @Nullable ByteBuffer container, int mark, int position, int limit, int capacity) {
-        PointerBuffer buf = new PointerBuffer(capacity);
-        buf.position(position);
-        buf.limit(limit);
-        return buf;
+        return new PointerBuffer(address, container, mark, position, limit, capacity);
     }
 
     public static PointerBuffer allocateDirect(int capacity) {
@@ -57,6 +57,11 @@ public class PointerBuffer extends CustomBuffer<PointerBuffer> {
 
     public PointerBuffer put(int index, long value) {
         MemoryUtil.memPutLong(address(index), value);
+        return this;
+    }
+
+    public PointerBuffer put(int index, ByteBuffer value) {
+        MemoryUtil.memPutLong(address(index), MemoryUtil.memAddress(value));
         return this;
     }
 

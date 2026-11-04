@@ -1,8 +1,8 @@
 plugins {
-	id 'fabric-loom' version '1.15.5'   
+	id 'fabric-loom' version '1.15.5'
 	id 'ploceus' version '1.15.9'
 	id 'maven-publish'
-}   
+}
 
 loom {
 	clientOnlyMinecraftJar()
@@ -25,7 +25,7 @@ dependencies {
 
 	modImplementation "org.lwjgl:lwjgl:3.4.1"
 	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1"
-	modImplementation "org.lwjgl:lwjgl-opengl:3.4.1"
+	modImplementation "org.lwjgl:lwjgl-vulkan:3.4.1"
 
 	modImplementation "org.lwjgl:lwjgl:3.4.1:natives-linux"
 	modImplementation "org.lwjgl:lwjgl:3.4.1:natives-windows"
@@ -33,11 +33,9 @@ dependencies {
 	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1:natives-linux"
 	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1:natives-windows"
 	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1:natives-macos"
-	modImplementation "org.lwjgl:lwjgl-opengl:3.4.1:natives-linux"
-	modImplementation "org.lwjgl:lwjgl-opengl:3.4.1:natives-windows"
-	modImplementation "org.lwjgl:lwjgl-opengl:3.4.1:natives-macos"
+	modImplementation "org.lwjgl:lwjgl-vulkan:3.4.1:natives-macos"
 
-	modImplementation "org.jspecify:jspecify:+"  
+	modImplementation "org.jspecify:jspecify:+"
 	modImplementation "org.ow2.asm:asm-commons:+"
 }
 
@@ -56,15 +54,6 @@ configurations.configureEach {
     }
 }
 
-def glLibDir = providers.exec {
-    commandLine "find", "/nix/store", "-name", "libGL.so.1", "-print", "-quit"
-}.standardOutput.asText.get().trim()
-def glLibParent = glLibDir.substring(0, glLibDir.lastIndexOf('/'))
-
-tasks.named('runClient') {
-    environment "LD_LIBRARY_PATH", glLibParent + ":" + (System.getenv("LD_LIBRARY_PATH") ?: "")
-}   
-
 jar {
     exclude 'net/minecraft/**'
-}
+}   

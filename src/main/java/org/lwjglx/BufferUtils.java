@@ -52,30 +52,50 @@ public class BufferUtils {
     }
 
     public static ByteBuffer createByteBuffer(long address, int size) {
-        return MemoryUtil.memAlloc(size);
+        return MemoryUtil.memByteBuffer(address, size);
     }
 
-    public static ShortBuffer createShortBuffer(long address, int size) {
+    public static ShortBuffer createShortBuffer(int size) {
         return MemoryUtil.memAllocShort(size);
     }
 
-    public static IntBuffer createIntBuffer(long address, int size) {
+    public static ShortBuffer createShortBuffer(long address, int size) {
+        return MemoryUtil.memByteBuffer(address, size * 2).asShortBuffer();
+    }
+
+    public static IntBuffer createIntBuffer(int size) {
         return MemoryUtil.memAllocInt(size);
     }
 
-    public static LongBuffer createLongBuffer(long address, int size) {
+    public static IntBuffer createIntBuffer(long address, int size) {
+        return MemoryUtil.memByteBuffer(address, size * 4).asIntBuffer();
+    }
+
+    public static LongBuffer createLongBuffer(int size) {
         return MemoryUtil.memAllocLong(size);
     }
 
-    public static FloatBuffer createFloatBuffer(long address, int size) {
+    public static LongBuffer createLongBuffer(long address, int size) {
+        return MemoryUtil.memByteBuffer(address, size * 8).asLongBuffer();
+    }
+
+    public static FloatBuffer createFloatBuffer(int size) {
         return MemoryUtil.memAllocFloat(size);
     }
 
-    public static DoubleBuffer createDoubleBuffer(long address, int size) {
+    public static FloatBuffer createFloatBuffer(long address, int size) {
+        return MemoryUtil.memByteBuffer(address, size * 4).asFloatBuffer();
+    }
+
+    public static DoubleBuffer createDoubleBuffer(int size) {
         return MemoryUtil.memAllocDouble(size);
     }
 
+    public static DoubleBuffer createDoubleBuffer(long address, int size) {
+        return MemoryUtil.memByteBuffer(address, size * 8).asDoubleBuffer();
+    }
+
     public static PointerBuffer createPointerBuffer(int size) {
-        return PointerBuffer.allocateDirect(size);
-    }   
+        return MemoryUtil.memAllocPointer(size);
+    }
 }   

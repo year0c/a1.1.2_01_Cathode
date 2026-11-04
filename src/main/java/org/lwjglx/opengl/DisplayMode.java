@@ -31,8 +31,11 @@ public class DisplayMode {
 
     @Override
     public int hashCode() {
-        return width * 31 + height * 31 + frequency;
-    }
+        int result = width;
+        result = 31 * result + height;
+        result = 31 * result + frequency;
+        return result;
+    }   
 
     @Override
     public String toString() {
