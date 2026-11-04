@@ -1,6 +1,7 @@
 # Gradle
 .gradle/
 build/
+gradle/
 
 # Minecraft development
 run/
@@ -9,6 +10,7 @@ decompiled/
 cfr*
 libs/
 mod/
+*.spv
 
 # IDE files
 .idea/

@@ -1,10 +1,12 @@
 package io.github.year0c.cathode.vulkan;
 
 import org.lwjgl.PointerBuffer;
+import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.system.MemoryUtil.*;
+import static org.lwjgl.system.MemoryStack.*;
 
 public class RenderLoop {
 
@@ -39,16 +41,17 @@ public class RenderLoop {
         this.pipeline = pipeline;
         this.lightmap = lightmap;
 
-        PointerBuffer cmdOut = memAllocPointer(1);
-        VkCommandBufferAllocateInfo allocInfo = VkCommandBufferAllocateInfo.calloc()
-            .sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO)
-            .commandPool(commandPool)
-            .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
-            .commandBufferCount(1);
-        vkAllocateCommandBuffers(device, allocInfo, cmdOut);
-        this.cmd = new VkCommandBuffer(cmdOut.get(0), device);
-        allocInfo.free();
-        memFree(cmdOut);
+        try (MemoryStack stack = stackPush()) {
+            PointerBuffer cmdOut = stack.callocPointer(1);
+            VkCommandBufferAllocateInfo allocInfo = VkCommandBufferAllocateInfo.calloc()
+                .sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO)
+                .commandPool(commandPool)
+                .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
+                .commandBufferCount(1);
+            vkAllocateCommandBuffers(device, allocInfo, cmdOut);
+            this.cmd = new VkCommandBuffer(cmdOut.get(0), device);
+            allocInfo.free();
+        }   
 
         VkFenceCreateInfo fenceInfo = VkFenceCreateInfo.calloc()
             .sType(VK_STRUCTURE_TYPE_FENCE_CREATE_INFO)
@@ -97,10 +100,11 @@ public class RenderLoop {
 
         vkBindBufferMemory(device, vertexBuffer, vertexMemory, 0);
 
-        PointerBuffer ptr = memAllocPointer(1);
-        vkMapMemory(device, vertexMemory, 0, size, 0, ptr);
-        this.vertexPtr = ptr.get(0);
-        memFree(ptr);
+        try (MemoryStack stack = stackPush()) {
+            PointerBuffer ptr = stack.callocPointer(1);
+            vkMapMemory(device, vertexMemory, 0, size, 0, ptr);
+            this.vertexPtr = ptr.get(0);
+        }
 
         this.vertexCapacity = size;
     }
@@ -240,17 +244,18 @@ public class RenderLoop {
         vkResetFences(device, fenceBuf);
         memFree(fenceBuf);
 
-        PointerBuffer cmdBuf = memAllocPointer(1);
-        cmdBuf.put(0, cmd.address());
-        cmdBuf.limit(1);
+        try (MemoryStack stack = stackPush()) {
+            PointerBuffer cmdBuf = stack.callocPointer(1);
+            cmdBuf.put(0, cmd.address());
+            cmdBuf.limit(1);
 
-        VkSubmitInfo submit = VkSubmitInfo.calloc()
-            .sType(VK_STRUCTURE_TYPE_SUBMIT_INFO)
-            .pCommandBuffers(cmdBuf);
+            VkSubmitInfo submit = VkSubmitInfo.calloc()
+                .sType(VK_STRUCTURE_TYPE_SUBMIT_INFO)
+                .pCommandBuffers(cmdBuf);
 
-        vkQueueSubmit(queue, submit, fence);
-        submit.free();
-        memFree(cmdBuf);
+            vkQueueSubmit(queue, submit, fence);
+            submit.free();
+        }   
     }
 
     public void updateLightmap(float skyLightFactor, float blockLightTint) {

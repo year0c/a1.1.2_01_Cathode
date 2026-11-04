@@ -2,10 +2,12 @@ package io.github.year0c.cathode.vulkan;
 
 import org.lwjgl.vulkan.*;
 
-import org.lwjgl.PointerBuffer;   
+import org.lwjgl.PointerBuffer;
+import org.lwjgl.system.MemoryStack;
 
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.system.MemoryUtil.*;
+import static org.lwjgl.system.MemoryStack.*;
 
 public class LightmapImage {
 
@@ -168,10 +170,11 @@ public class LightmapImage {
 
         vkBindBufferMemory(device, stagingBuffer, stagingMemory, 0);
 
-        PointerBuffer ptr = memAllocPointer(1);
-        vkMapMemory(device, stagingMemory, 0, size, 0, ptr);
-        this.stagingPtr = ptr.get(0);
-        memFree(ptr);   
+        try (MemoryStack stack = stackPush()) {
+            PointerBuffer ptr = stack.callocPointer(1);
+            vkMapMemory(device, stagingMemory, 0, size, 0, ptr);
+            this.stagingPtr = ptr.get(0);
+        }   
     }   
 
     private int findMemoryType(int typeBits, int requiredProps) {
@@ -296,31 +299,33 @@ public class LightmapImage {
             .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
             .commandBufferCount(1);
 
-        PointerBuffer cmdOut = memAllocPointer(1);
-        vkAllocateCommandBuffers(device, allocInfo, cmdOut);
-        VkCommandBuffer cmd = new VkCommandBuffer(cmdOut.get(0), device);   
+        try (MemoryStack stack = stackPush()) {
+            PointerBuffer cmdOut = stack.callocPointer(1);
+            vkAllocateCommandBuffers(device, allocInfo, cmdOut);
+            VkCommandBuffer cmd = new VkCommandBuffer(cmdOut.get(0), device);
+
+            VkCommandBufferBeginInfo beginInfo = VkCommandBufferBeginInfo.calloc()
+                .sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO)
+                .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+            vkBeginCommandBuffer(cmd, beginInfo);
+            upload(white, cmd);
+            vkEndCommandBuffer(cmd);
+            beginInfo.free();
+
+            VkSubmitInfo submit = VkSubmitInfo.calloc()
+                .sType(VK_STRUCTURE_TYPE_SUBMIT_INFO)
+                .pCommandBuffers(cmdOut);
+
+            vkQueueSubmit(queue, submit, VK_NULL_HANDLE);
+            vkQueueWaitIdle(queue);
+
+            submit.free();
+            vkFreeCommandBuffers(device, commandPool, cmdOut);
+        }
+
         allocInfo.free();
-
-        VkCommandBufferBeginInfo beginInfo = VkCommandBufferBeginInfo.calloc()
-            .sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO)
-            .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
-        vkBeginCommandBuffer(cmd, beginInfo);
-        upload(white, cmd);
-        vkEndCommandBuffer(cmd);
-        beginInfo.free();
-
-        VkSubmitInfo submit = VkSubmitInfo.calloc()
-            .sType(VK_STRUCTURE_TYPE_SUBMIT_INFO)
-            .pCommandBuffers(cmdOut);
-
-        vkQueueSubmit(queue, submit, VK_NULL_HANDLE);
-        vkQueueWaitIdle(queue);
-
-        submit.free();
-        vkFreeCommandBuffers(device, commandPool, cmdOut);
-        memFree(cmdOut);   
-    }
+    }   
 
     public long getImageView() { return imageView; }
     public long getSampler()   { return sampler; }

@@ -1,7 +1,6 @@
 package io.github.year0c.cathode.mixin;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.render.Tesselator;
 import io.github.year0c.cathode.vulkan.*;
 import io.github.year0c.cathode.probe.SkyProbe;
 
@@ -19,6 +18,14 @@ public abstract class MinecraftMixin {
 
     @Inject(method = "init", at = @At("TAIL"))
     private void cathode$init(CallbackInfo ci) {
+        System.out.println("[Cathode] init hook fired");
+        System.out.println("[Cathode] device=" + VulkanContext.device);
+
+        if (VulkanContext.device == null) {
+            System.err.println("[Cathode] ABORT: VulkanContext not initialized");
+            return;
+        }
+
         this.lightmap = new LightmapImage(
             VulkanContext.device, VulkanContext.physicalDevice,
             VulkanContext.commandPool, VulkanContext.queue);
@@ -33,11 +40,13 @@ public abstract class MinecraftMixin {
             VulkanContext.queue, VulkanContext.commandPool,
             pipeline, lightmap);
 
-        Tesselator.setRenderLoop(renderLoop);
+        RenderLoopHolder.set(renderLoop);   
+        System.out.println("[Cathode] init complete");
     }
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void cathode$tick(CallbackInfo ci) {
+        if (renderLoop == null) return;
         Minecraft mc = (Minecraft) (Object) this;
         SkyProbe probe = SkyProbe.getInstance();
         probe.update(mc.world.ticks);
@@ -46,12 +55,14 @@ public abstract class MinecraftMixin {
 
     @Inject(method = "run", at = @At("HEAD"))
     private void cathode$beginFrame(CallbackInfo ci) {
+        if (renderLoop == null) return;
         Minecraft mc = (Minecraft) (Object) this;
         renderLoop.beginFrame(mc.width, mc.height);
     }
 
     @Inject(method = "run", at = @At("TAIL"))
     private void cathode$submitFrame(CallbackInfo ci) {
+        if (renderLoop == null) return;
         renderLoop.recordWorldPass(VulkanContext.renderPass, VulkanContext.framebuffer);
         renderLoop.submit();
     }
