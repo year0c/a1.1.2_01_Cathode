@@ -5,6 +5,12 @@ import static org.lwjgl.vulkan.VK10.*;
 
 public class VulkanUtil {
 
+    // --- Shared uniforms (read by pipelines, written by shaders) ---
+    public static float[] fogColor = {0.65f, 0.85f, 1.0f};
+    public static float fogDensity = 0.004f;
+    public static float time = 0f;
+
+    // --- Memory ---
     public static int findMemoryType(VkPhysicalDevice physicalDevice, int typeBits, int requiredProps) {
         VkPhysicalDeviceMemoryProperties memProps = VkPhysicalDeviceMemoryProperties.calloc();
         vkGetPhysicalDeviceMemoryProperties(physicalDevice, memProps);
@@ -34,4 +40,4 @@ public class VulkanUtil {
         }
         return result;
     }
-}
+}   

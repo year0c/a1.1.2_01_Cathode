@@ -233,20 +233,21 @@ public class RenderLoop {
 
     public void updateSkyUniforms(float camX, float camY, float camZ, float fov, float aspect) {
         skyPipeline.updateUniforms(
-            VulkanShader.zenithColor,
-            VulkanShader.horizonColor,
-            VulkanShader.sunDir,
-            VulkanShader.starAlpha,
+            VulkanSkyShader.zenithColor,
+            VulkanSkyShader.horizonColor,
+            VulkanSkyShader.sunDir,
+            VulkanSkyShader.starAlpha,
             camX, camY, camZ,
             fov, aspect
         );
         pipeline.updateFogUniforms(
-            VulkanShader.fogColor,
-            VulkanShader.fogDensity
+            VulkanUtil.fogColor,
+            VulkanUtil.fogDensity
         );
-        liquidPipeline.updateFogUniforms(
-            VulkanShader.fogColor,
-            VulkanShader.fogDensity
+        liquidPipeline.updateUniforms(
+            VulkanUtil.fogColor,
+            VulkanUtil.fogDensity,
+            (float)(System.currentTimeMillis() * 0.001)
         );
     }
 
@@ -373,7 +374,7 @@ public class RenderLoop {
             liqSets.put(0, liquidPipeline.getDescriptorSet());
             liqSets.limit(1);
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                liquidPipeline.getPipelineLayout(), 0, liqSets, null);
+                    liquidPipeline.getPipelineLayout(), 0, liqSets, null);
             memFree(liqSets);
 
             java.nio.LongBuffer liqBufs = memAllocLong(1);

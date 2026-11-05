@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import io.github.year0c.cathode.vulkan.*;
 import io.github.year0c.cathode.vulkan.util.RenderLoopHolderUtil;
 import io.github.year0c.cathode.vulkan.util.VulkanContextUtil;
+import io.github.year0c.cathode.vulkan.util.VulkanUtil;
 import io.github.year0c.cathode.vulkan.util.WorldHolderUtil;
 import io.github.year0c.cathode.probe.SkyProbe;
 
@@ -69,7 +70,7 @@ public abstract class MinecraftMixin {
         WorldHolderUtil.set(mc.world);
         SkyProbe probe = SkyProbe.getInstance();
         probe.update(mc.world.ticks);
-        VulkanShader.updateSky(probe.getTimeOfDay());
+        VulkanSkyShader.updateSky(probe.getTimeOfDay());
         renderLoop.updateLightmap(probe.getSkyLightFactor(), probe.getBlockLightTint());
     }
 
@@ -82,7 +83,7 @@ public abstract class MinecraftMixin {
 
         int chunks = mc.options.viewDistance;
         if (chunks < 2) chunks = 2;
-        VulkanShader.fogDensity = 1.0f / (chunks * 16.0f);
+        VulkanUtil.fogDensity = 1.0f / (chunks * 16.0f);
 
         renderLoop.updateSkyUniforms(
             (float) mc.player.x,

@@ -2,9 +2,10 @@ package io.github.year0c.cathode.mixin;
 
 import net.minecraft.client.render.vertex.Tesselator;
 import net.minecraft.world.World;
-import io.github.year0c.cathode.vulkan.VulkanShader;
+import net.minecraft.block.Block;
+import io.github.year0c.cathode.vulkan.VulkanGroundShader;
+import io.github.year0c.cathode.vulkan.VulkanLiquidShader;
 import io.github.year0c.cathode.vulkan.util.RenderLoopHolderUtil;
-import io.github.year0c.cathode.vulkan.util.VulkanLightContextUtil;
 import io.github.year0c.cathode.vulkan.util.WorldHolderUtil;
 
 import org.spongepowered.asm.mixin.Mixin;
@@ -25,30 +26,18 @@ public abstract class TesselatorMixin {
         World w = WorldHolderUtil.get();
         if (w == null) return;
 
-        VulkanShader.compute(w, (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+        int bx = (int) Math.floor(x);
+        int by = (int) Math.floor(y);
+        int bz = (int) Math.floor(z);
+        int block = w.getBlock(bx, by, bz);
+        boolean isLiquid = block >= 0 && block < Block.BY_ID.length
+            && Block.BY_ID[block] != null
+            && Block.BY_ID[block].material.isLiquid();
 
-        int c = this.color;
-        float r = ((c >> 16) & 0xFF) / 255.0f;
-        float g = ((c >> 8) & 0xFF) / 255.0f;
-        float b = (c & 0xFF) / 255.0f;
-        float a = ((c >> 24) & 0xFF) / 255.0f;
-
-        if (VulkanLightContextUtil.isLiquid()) {
-            RenderLoopHolderUtil.get().pushLiquidVertex(
-                (float) x, (float) y, (float) z,
-                r, g, b, a,
-                (float) u, (float) v,
-                VulkanLightContextUtil.getLightU(),
-                VulkanLightContextUtil.getLightV()
-            );
+        if (isLiquid) {
+            VulkanLiquidShader.push(w, (float) x, (float) y, (float) z, (float) u, (float) v, this.color);
         } else {
-            RenderLoopHolderUtil.get().pushVertex(
-                (float) x, (float) y, (float) z,
-                r, g, b, a,
-                (float) u, (float) v,
-                VulkanLightContextUtil.getLightU(),
-                VulkanLightContextUtil.getLightV()
-            );
+            VulkanGroundShader.push(w, (float) x, (float) y, (float) z, (float) u, (float) v, this.color);
         }
         ci.cancel();
     }

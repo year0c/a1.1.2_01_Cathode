@@ -25,7 +25,7 @@ public class LiquidPipeline {
     private long fogMemory;
     private long fogPtr;
 
-    private static final int FOG_SIZE = 16;
+    private static final int FOG_SIZE = 20; // vec3 fogColor + float fogDensity + float time
 
     public LiquidPipeline(VkDevice device, VkPhysicalDevice physicalDevice, long renderPass) {
         this.device = device;
@@ -58,7 +58,7 @@ public class LiquidPipeline {
             .binding(2)
             .descriptorType(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
             .descriptorCount(1)
-            .stageFlags(VK_SHADER_STAGE_FRAGMENT_BIT);
+            .stageFlags(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
         VkDescriptorSetLayoutCreateInfo info = VkDescriptorSetLayoutCreateInfo.calloc()
             .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO)
@@ -144,7 +144,6 @@ public class LiquidPipeline {
             .rasterizationSamples(VK_SAMPLE_COUNT_1_BIT)
             .sampleShadingEnable(false);
 
-        // Depth test ON, depth write OFF
         VkPipelineDepthStencilStateCreateInfo depthStencil = VkPipelineDepthStencilStateCreateInfo.calloc()
             .sType(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO)
             .depthTestEnable(true)
@@ -153,7 +152,6 @@ public class LiquidPipeline {
             .depthBoundsTestEnable(false)
             .stencilTestEnable(false);
 
-        // Blending: SRC_ALPHA / ONE_MINUS_SRC_ALPHA
         VkPipelineColorBlendAttachmentState.Buffer attachments = VkPipelineColorBlendAttachmentState.calloc(1);
         attachments.get(0)
             .blendEnable(true)
@@ -363,11 +361,12 @@ public class LiquidPipeline {
         fogBufInfo.free();
     }
 
-    public void updateFogUniforms(float[] fogColor, float fogDensity) {
+    public void updateUniforms(float[] fogColor, float fogDensity, float time) {
         memPutFloat(fogPtr + 0, fogColor[0]);
         memPutFloat(fogPtr + 4, fogColor[1]);
         memPutFloat(fogPtr + 8, fogColor[2]);
         memPutFloat(fogPtr + 12, fogDensity);
+        memPutFloat(fogPtr + 16, time);
     }
 
     public long getPipeline()       { return pipeline; }
