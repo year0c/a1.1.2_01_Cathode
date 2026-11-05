@@ -20,6 +20,7 @@ public class RenderLoop {
     private final long fence;
 
     private final WorldPipeline pipeline;
+    private final SkyPipeline skyPipeline;
     private final LightmapImage lightmap;
 
     private long vertexBuffer;
@@ -35,12 +36,13 @@ public class RenderLoop {
 
     public RenderLoop(VkDevice device, VkPhysicalDevice physicalDevice,
         VkQueue queue, long commandPool,
-        WorldPipeline pipeline, LightmapImage lightmap) {
+        WorldPipeline pipeline, SkyPipeline skyPipeline, LightmapImage lightmap) {
         this.device = device;
         this.physicalDevice = physicalDevice;
         this.queue = queue;
         this.commandPool = commandPool;
         this.pipeline = pipeline;
+        this.skyPipeline = skyPipeline;
         this.lightmap = lightmap;
 
         try (MemoryStack stack = stackPush()) {
@@ -53,7 +55,7 @@ public class RenderLoop {
             vkAllocateCommandBuffers(device, allocInfo, cmdOut);
             this.cmd = new VkCommandBuffer(cmdOut.get(0), device);
             allocInfo.free();
-        }   
+        }
 
         VkFenceCreateInfo fenceInfo = VkFenceCreateInfo.calloc()
             .sType(VK_STRUCTURE_TYPE_FENCE_CREATE_INFO)
@@ -145,6 +147,21 @@ public class RenderLoop {
         this.vertexCount = 0;
     }
 
+    public void updateSkyUniforms(float camX, float camY, float camZ, float fov, float aspect) {
+        skyPipeline.updateUniforms(
+            VulkanShader.zenithColor,
+            VulkanShader.horizonColor,
+            VulkanShader.sunDir,
+            VulkanShader.starAlpha,
+            camX, camY, camZ,
+            fov, aspect
+        );
+        pipeline.updateFogUniforms(
+            VulkanShader.fogColor,
+            VulkanShader.fogDensity
+        );
+    }   
+
     public void recordWorldPass(long renderPass, long framebuffer) {
         VkCommandBufferBeginInfo beginInfo = VkCommandBufferBeginInfo.calloc()
             .sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO)
@@ -179,18 +196,51 @@ public class RenderLoop {
         extent.free();
         offset.free();
 
-        // Bind pipeline
+        // === SKY ===
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skyPipeline.getPipeline());
+
+        java.nio.LongBuffer skySets = memAllocLong(1);
+        skySets.put(0, skyPipeline.getDescriptorSet());
+        skySets.limit(1);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                skyPipeline.getPipelineLayout(), 0, skySets, null);
+        memFree(skySets);
+
+        VkViewport.Buffer skyViewports = VkViewport.calloc(1);
+        skyViewports.get(0)
+            .x(0).y(0)
+            .width(viewportWidth)
+            .height(viewportHeight)
+            .minDepth(0.0f)
+            .maxDepth(1.0f);
+        vkCmdSetViewport(cmd, 0, skyViewports);
+        skyViewports.free();
+
+        VkOffset2D skyScissorOffset = VkOffset2D.calloc();
+        skyScissorOffset.x(0);
+        skyScissorOffset.y(0);
+        VkExtent2D skyScissorExtent = VkExtent2D.calloc();
+        skyScissorExtent.width((int) viewportWidth);
+        skyScissorExtent.height((int) viewportHeight);
+        VkRect2D.Buffer skyScissors = VkRect2D.calloc(1);
+        skyScissors.get(0).offset(skyScissorOffset).extent(skyScissorExtent);
+        vkCmdSetScissor(cmd, 0, skyScissors);
+        skyScissors.free();
+        skyScissorExtent.free();
+        skyScissorOffset.free();
+
+        vkCmdDraw(cmd, 3, 1, 0, 0);
+
+        // === WORLD ===
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.getPipeline());
 
-        // Bind descriptor set
         java.nio.LongBuffer sets = memAllocLong(1);
         sets.put(0, pipeline.getDescriptorSet());
         sets.limit(1);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                pipeline.getPipelineLayout(), 0, sets, null);   
+                pipeline.getPipelineLayout(), 0, sets, null);
         memFree(sets);
 
-        // Bind vertex buffer
         java.nio.LongBuffer bufs = memAllocLong(1);
         bufs.put(0, vertexBuffer);
         bufs.limit(1);
@@ -201,7 +251,6 @@ public class RenderLoop {
         memFree(bufs);
         memFree(offsets);
 
-        // Viewport
         VkViewport.Buffer viewports = VkViewport.calloc(1);
         viewports.get(0)
             .x(0).y(0)
@@ -212,7 +261,6 @@ public class RenderLoop {
         vkCmdSetViewport(cmd, 0, viewports);
         viewports.free();
 
-        // Scissor
         VkOffset2D scissorOffset = VkOffset2D.calloc();
         scissorOffset.x(0);
         scissorOffset.y(0);
@@ -230,7 +278,6 @@ public class RenderLoop {
         scissorExtent.free();
         scissorOffset.free();
 
-        // Draw
         vkCmdDraw(cmd, vertexCount, 1, 0, 0);
 
         vkCmdEndRenderPass(cmd);
@@ -242,7 +289,7 @@ public class RenderLoop {
         fenceBuf.put(0, fence);
         fenceBuf.limit(1);
 
-        vkWaitForFences(device, fenceBuf, true, Long.MAX_VALUE);   
+        vkWaitForFences(device, fenceBuf, true, Long.MAX_VALUE);
         vkResetFences(device, fenceBuf);
         memFree(fenceBuf);
 
@@ -257,7 +304,7 @@ public class RenderLoop {
 
             vkQueueSubmit(queue, submit, fence);
             submit.free();
-        }   
+        }
     }
 
     public void updateLightmap(float skyLightFactor, float blockLightTint) {

@@ -1,17 +1,19 @@
 #version 450
 
-layout(location = 0) in vec3 aPosition;
-layout(location = 1) in vec4 aColor;
-layout(location = 2) in vec2 aUV;
-layout(location = 3) in vec2 aLightUV;
+layout(location = 0) in vec3 inPos;
+layout(location = 1) in vec4 inColor;
+layout(location = 2) in vec2 inUV;
+layout(location = 3) in vec2 inLightUV;
 
 layout(location = 0) out vec4 vColor;
 layout(location = 1) out vec2 vUV;
 layout(location = 2) out vec2 vLightUV;
+layout(location = 3) out float vDepth;
 
 void main() {
-    vColor   = aColor;
-    vUV      = aUV;
-    vLightUV = aLightUV;
-    gl_Position = vec4(aPosition, 1.0);
+    vColor = inColor;
+    vUV = inUV;
+    vLightUV = inLightUV;
+    gl_Position = vec4(inPos, 1.0);
+    vDepth = gl_Position.w; // view-space depth
 }   

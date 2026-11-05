@@ -5,12 +5,15 @@ import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 import org.lwjgl.vulkan.*;
 
+import io.github.year0c.cathode.vulkan.util.VulkanUtil;
+
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.system.MemoryUtil.*;
 
 public class WorldPipeline {
 
     private final VkDevice device;
+    private final VkPhysicalDevice physicalDevice;
     private final long renderPass;
 
     private long descriptorSetLayout;
@@ -18,19 +21,26 @@ public class WorldPipeline {
     private long pipeline;
     private long descriptorPool;
     private long descriptorSet;
+    private long fogBuffer;
+    private long fogMemory;
+    private long fogPtr;
 
-    public WorldPipeline(VkDevice device, long renderPass) {
+    private static final int FOG_SIZE = 16; // vec3 + float
+
+    public WorldPipeline(VkDevice device, VkPhysicalDevice physicalDevice, long renderPass) {
         this.device = device;
+        this.physicalDevice = physicalDevice;
         this.renderPass = renderPass;
 
         createDescriptorSetLayout();
         createPipelineLayout();
         createPipeline();
         createDescriptorPool();
+        createFogBuffer();
     }
 
     private void createDescriptorSetLayout() {
-        VkDescriptorSetLayoutBinding.Buffer bindings = VkDescriptorSetLayoutBinding.calloc(2);
+        VkDescriptorSetLayoutBinding.Buffer bindings = VkDescriptorSetLayoutBinding.calloc(3);
 
         bindings.get(0)
             .binding(0)
@@ -41,6 +51,12 @@ public class WorldPipeline {
         bindings.get(1)
             .binding(1)
             .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+            .descriptorCount(1)
+            .stageFlags(VK_SHADER_STAGE_FRAGMENT_BIT);
+
+        bindings.get(2)
+            .binding(2)
+            .descriptorType(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
             .descriptorCount(1)
             .stageFlags(VK_SHADER_STAGE_FRAGMENT_BIT);
 
@@ -72,7 +88,6 @@ public class WorldPipeline {
     }
 
     private void createPipeline() {
-        // Vertex: position(3f) | color(4f) | uv(2f) | light_uv(2f) = 44 bytes
         VkVertexInputBindingDescription.Buffer vibs = VkVertexInputBindingDescription.calloc(1);
         vibs.get(0)
             .binding(0)
@@ -157,13 +172,11 @@ public class WorldPipeline {
             .sType(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO)
             .pDynamicStates(dynBuf);
 
-        // Shader entry point name
         ByteBuffer entryName = ByteBuffer.allocateDirect(5);
         entryName.put("main".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         entryName.put((byte) 0);
-        entryName.position(0);     
+        entryName.position(0);
 
-        // Shaders
         VkPipelineShaderStageCreateInfo.Buffer stages = VkPipelineShaderStageCreateInfo.calloc(2);
 
         stages.get(0)
@@ -217,33 +230,6 @@ public class WorldPipeline {
         infos.free();
     }
 
-    private long compileShader(String path) {
-        byte[] spirv = loadSpirv(path);
-
-        ByteBuffer code = ByteBuffer.allocateDirect(spirv.length);
-        code.put(spirv);
-        code.position(0);
-        code.limit(spirv.length);
-
-        VkShaderModuleCreateInfo info = VkShaderModuleCreateInfo.calloc()
-            .sType(VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO)
-            .pCode(code);
-
-        long[] out = new long[1];
-        vkCreateShaderModule(device, info, null, out);
-        info.free();
-        return out[0];
-    }   
-
-    private byte[] loadSpirv(String path) {
-        try (java.io.InputStream is = getClass().getResourceAsStream("/shaders/" + path)) {
-            if (is == null) throw new RuntimeException("Missing shader: " + path);
-            return is.readAllBytes();
-        } catch (java.io.IOException e) {
-            throw new RuntimeException("Failed to load shader: " + path, e);
-        }
-    }   
-
     private void createDescriptorPool() {
         VkDescriptorPoolSize.Buffer sizes = VkDescriptorPoolSize.calloc(2);
         sizes.get(0)
@@ -263,6 +249,44 @@ public class WorldPipeline {
         this.descriptorPool = out[0];
         info.free();
         sizes.free();
+    }
+
+    private void createFogBuffer() {
+        VkBufferCreateInfo bufInfo = VkBufferCreateInfo.calloc()
+            .sType(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO)
+            .size(FOG_SIZE)
+            .usage(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
+            .sharingMode(VK_SHARING_MODE_EXCLUSIVE);
+
+        long[] bufOut = new long[1];
+        vkCreateBuffer(device, bufInfo, null, bufOut);
+        this.fogBuffer = bufOut[0];
+        bufInfo.free();
+
+        VkMemoryRequirements req = VkMemoryRequirements.calloc();
+        vkGetBufferMemoryRequirements(device, fogBuffer, req);
+
+        int memType = VulkanUtil.findMemoryType(physicalDevice, req.memoryTypeBits(),
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        VkMemoryAllocateInfo alloc = VkMemoryAllocateInfo.calloc()
+            .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
+            .allocationSize(req.size())
+            .memoryTypeIndex(memType);
+
+        long[] memOut = new long[1];
+        vkAllocateMemory(device, alloc, null, memOut);
+        this.fogMemory = memOut[0];
+        alloc.free();
+        req.free();
+
+        vkBindBufferMemory(device, fogBuffer, fogMemory, 0);
+
+        try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
+            org.lwjgl.PointerBuffer ptr = stack.callocPointer(1);
+            vkMapMemory(device, fogMemory, 0, FOG_SIZE, 0, ptr);
+            this.fogPtr = ptr.get(0);
+        }
     }
 
     public void initDescriptorSet(long iconImageView, long iconSampler,
@@ -294,7 +318,13 @@ public class WorldPipeline {
             .sampler(lightmapSampler)
             .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-        VkWriteDescriptorSet.Buffer writes = VkWriteDescriptorSet.calloc(2);
+        VkDescriptorBufferInfo.Buffer fogBufInfo = VkDescriptorBufferInfo.calloc(1);
+        fogBufInfo.get(0)
+            .buffer(fogBuffer)
+            .offset(0)
+            .range(FOG_SIZE);
+
+        VkWriteDescriptorSet.Buffer writes = VkWriteDescriptorSet.calloc(3);
         writes.get(0)
             .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
             .dstSet(descriptorSet)
@@ -309,21 +339,66 @@ public class WorldPipeline {
             .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
             .descriptorCount(1)
             .pImageInfo(lightmapInfos);
+        writes.get(2)
+            .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
+            .dstSet(descriptorSet)
+            .dstBinding(2)
+            .descriptorType(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+            .descriptorCount(1)
+            .pBufferInfo(fogBufInfo);
 
-        vkUpdateDescriptorSets(device, writes, null);   
+        vkUpdateDescriptorSets(device, writes, null);
         writes.free();
         iconInfos.free();
-        lightmapInfos.free();   
+        lightmapInfos.free();
+        fogBufInfo.free();
+    }
+
+    public void updateFogUniforms(float[] fogColor, float fogDensity) {
+        memPutFloat(fogPtr + 0, fogColor[0]);
+        memPutFloat(fogPtr + 4, fogColor[1]);
+        memPutFloat(fogPtr + 8, fogColor[2]);
+        memPutFloat(fogPtr + 12, fogDensity);
     }
 
     public long getPipeline()       { return pipeline; }
     public long getPipelineLayout() { return pipelineLayout; }
     public long getDescriptorSet()  { return descriptorSet; }
 
+    private long compileShader(String path) {
+        byte[] spirv = loadSpirv(path);
+
+        ByteBuffer code = ByteBuffer.allocateDirect(spirv.length);
+        code.put(spirv);
+        code.position(0);
+        code.limit(spirv.length);
+
+        VkShaderModuleCreateInfo info = VkShaderModuleCreateInfo.calloc()
+            .sType(VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO)
+            .pCode(code);
+
+        long[] out = new long[1];
+        vkCreateShaderModule(device, info, null, out);
+        info.free();
+        return out[0];
+    }
+
+    private byte[] loadSpirv(String path) {
+        try (java.io.InputStream is = getClass().getResourceAsStream("/shaders/" + path)) {
+            if (is == null) throw new RuntimeException("Missing shader: " + path);
+            return is.readAllBytes();
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Failed to load shader: " + path, e);
+        }
+    }
+
     public void close() {
         vkDestroyPipeline(device, pipeline, null);
         vkDestroyDescriptorPool(device, descriptorPool, null);
         vkDestroyPipelineLayout(device, pipelineLayout, null);
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, null);
+        vkUnmapMemory(device, fogMemory);
+        vkFreeMemory(device, fogMemory, null);
+        vkDestroyBuffer(device, fogBuffer, null);
     }
-}
+}   

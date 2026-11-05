@@ -17,6 +17,7 @@ public abstract class MinecraftMixin {
 
     private LightmapImage lightmap;
     private WorldPipeline pipeline;
+    private SkyPipeline skyPipeline;
     private RenderLoop renderLoop;
 
     @Inject(method = "init", at = @At("TAIL"))
@@ -33,15 +34,18 @@ public abstract class MinecraftMixin {
             VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
             VulkanContextUtil.commandPool, VulkanContextUtil.queue);
 
-        this.pipeline = new WorldPipeline(VulkanContextUtil.device, VulkanContextUtil.renderPass);
-        this.pipeline.initDescriptorSet(
-            VulkanContextUtil.iconImageView, VulkanContextUtil.iconSampler,
-            lightmap.getImageView(), lightmap.getSampler());
+        this.pipeline = new WorldPipeline(
+            VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
+            VulkanContextUtil.renderPass);   
+
+        this.skyPipeline = new SkyPipeline(
+            VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
+            VulkanContextUtil.renderPass);
 
         this.renderLoop = new RenderLoop(
             VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
             VulkanContextUtil.queue, VulkanContextUtil.commandPool,
-            pipeline, lightmap);
+            pipeline, skyPipeline, lightmap);
 
         RenderLoopHolderUtil.set(renderLoop);
         System.out.println("[Cathode] init complete");
@@ -54,6 +58,7 @@ public abstract class MinecraftMixin {
         WorldHolderUtil.set(mc.world);
         SkyProbe probe = SkyProbe.getInstance();
         probe.update(mc.world.ticks);
+        VulkanShader.updateSky(probe.getTimeOfDay());
         renderLoop.updateLightmap(probe.getSkyLightFactor(), probe.getBlockLightTint());
     }
 
@@ -62,7 +67,21 @@ public abstract class MinecraftMixin {
         if (renderLoop == null) return;
         Minecraft mc = (Minecraft) (Object) this;
         renderLoop.beginFrame(mc.width, mc.height);
-    }
+        float aspect = (float) mc.width / (float) mc.height;
+
+        // Fog density from viewDistance (chunks → blocks)
+        int chunks = mc.options.viewDistance;
+        if (chunks < 2) chunks = 2;
+        VulkanShader.fogDensity = 1.0f / (chunks * 16.0f);
+
+        renderLoop.updateSkyUniforms(
+            (float) mc.player.x,
+            (float) mc.player.y,
+            (float) mc.player.z,
+            70.0f,
+            aspect
+        );
+    }   
 
     @Inject(method = "run", at = @At("TAIL"))
     private void cathode$submitFrame(CallbackInfo ci) {
