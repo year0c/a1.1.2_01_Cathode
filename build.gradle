@@ -4,12 +4,35 @@ plugins {
 	id 'maven-publish'
 }
 
+repositories {
+	mavenCentral()
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = "Modrinth"
+				url = "https://api.modrinth.com/maven"
+				metadataSources {
+					mavenPom()
+					artifact()
+				}
+			}
+		}
+		filter {
+			includeGroup "maven.modrinth"
+		}
+	}
+}
+
 loom {
 	clientOnlyMinecraftJar()
 }
 
 ploceus {
 	setIntermediaryGeneration(2)
+}
+
+configurations {
+	modsRuntime
 }
 
 dependencies {
@@ -37,6 +60,12 @@ dependencies {
 
 	modImplementation "org.jspecify:jspecify:+"
 	modImplementation "org.ow2.asm:asm-commons:+"
+
+	compileOnly "maven.modrinth:wx17t6U9:QPGKOis1"
+	compileOnly "maven.modrinth:siR15Ede:vDA5ncMN"
+
+	modsRuntime "maven.modrinth:wx17t6U9:QPGKOis1"
+	modsRuntime "maven.modrinth:siR15Ede:vDA5ncMN"
 }
 
 configurations.configureEach {
@@ -65,7 +94,8 @@ task compileShadersVert(type: Exec) {
     commandLine glslc,
         "-fshader-stage=vert",
         "src/main/resources/shaders/src/world_vert.glsl",
-        "-o", "src/main/resources/shaders/world_vert.spv"
+        "-o",
+        "src/main/resources/shaders/world_vert.spv"
 }
 
 task compileShadersFrag(type: Exec) {
@@ -79,13 +109,24 @@ task compileShadersFrag(type: Exec) {
     commandLine glslc,
         "-fshader-stage=frag",
         "src/main/resources/shaders/src/world_frag.glsl",
-        "-o", "src/main/resources/shaders/world_frag.spv"
+        "-o",
+        "src/main/resources/shaders/world_frag.spv"
 }
 
 processResources {
     dependsOn compileShadersVert
     dependsOn compileShadersFrag
 }
+
+task copyMods(type: Copy) {
+    from configurations.modsRuntime
+    into "run/mods"
+}   
+
+runClient {
+    dependsOn copyMods
+    jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED")
+}   
 
 jar {
     exclude 'net/minecraft/**'

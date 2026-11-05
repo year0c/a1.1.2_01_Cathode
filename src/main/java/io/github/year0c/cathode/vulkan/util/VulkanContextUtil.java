@@ -1,7 +1,7 @@
 package io.github.year0c.cathode.vulkan.util;
 
+import org.lwjgl.opengl.util.GL11.GL11Vars;
 import org.lwjgl.vulkan.*;
-import org.lwjglx.opengl.util.GL11.GL11Vars;
 
 public class VulkanContextUtil {
     public static VkDevice getDevice() { return GL11Vars.device; }
