@@ -1,11 +1,17 @@
-package org.lwjglx.opengl;
+package org.lwjglx.opengl.util.GL11;
 
 import org.lwjgl.vulkan.*;
 import java.util.HashMap;
 import java.util.Map;
 
-public class GL11Util {
-    // Vulkan core
+public class GL11Vars {
+    public static boolean debug = true;
+
+    public static void log(String msg) {
+        if (debug) System.out.println("[GL11] " + msg);
+    }
+
+    // Core
     public static VkInstance instance;
     public static VkPhysicalDevice physicalDevice;
     public static VkDevice device;
@@ -14,6 +20,7 @@ public class GL11Util {
     public static int gfxFamily;
     public static long commandPool;
     public static VkCommandBuffer[] commandBuffers;
+    public static boolean initialized = false;
 
     // Swapchain
     public static long swapchain;
@@ -61,13 +68,11 @@ public class GL11Util {
     public static final Map<Integer, Long> descriptorSets = new HashMap<>();
     public static final Map<Long, Long> pipelineCache = new HashMap<>();
 
-    // Render pass + framebuffers (for Cathode)
+    // Render pass + framebuffers
     public static long renderPass;
     public static long[] swapchainFramebuffers;
 
     // Icon
     public static long iconImageView;
     public static long iconSampler;
-
-    public static boolean initialized = false;
 }   
