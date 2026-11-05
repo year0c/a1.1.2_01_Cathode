@@ -1,8 +1,11 @@
 package io.github.year0c.cathode.mixin;
 
 import net.minecraft.client.render.vertex.Tesselator;
-import io.github.year0c.cathode.vulkan.VulkanLightContext;
-import io.github.year0c.cathode.vulkan.RenderLoopHolder;
+import net.minecraft.world.World;
+import io.github.year0c.cathode.vulkan.VulkanShader;
+import io.github.year0c.cathode.vulkan.util.RenderLoopHolderUtil;
+import io.github.year0c.cathode.vulkan.util.VulkanLightContextUtil;
+import io.github.year0c.cathode.vulkan.util.WorldHolderUtil;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -18,20 +21,25 @@ public abstract class TesselatorMixin {
 
     @Inject(method = "vertex(DDDDD)V", at = @At("HEAD"), cancellable = true)
     private void cathode$vertex(double x, double y, double z, double u, double v, CallbackInfo ci) {
-        if (RenderLoopHolder.get() == null) return;
+        if (RenderLoopHolderUtil.get() == null) return;
+        World w = WorldHolderUtil.get();
+        if (w == null) return;
+
+        VulkanShader.compute(w, (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+
         int c = this.color;
         float r = ((c >> 16) & 0xFF) / 255.0f;
         float g = ((c >> 8) & 0xFF) / 255.0f;
         float b = (c & 0xFF) / 255.0f;
         float a = ((c >> 24) & 0xFF) / 255.0f;
 
-        RenderLoopHolder.get().pushVertex(
+        RenderLoopHolderUtil.get().pushVertex(
             (float) x, (float) y, (float) z,
             r, g, b, a,
             (float) u, (float) v,
-            VulkanLightContext.getLightU(),
-            VulkanLightContext.getLightV()
+            VulkanLightContextUtil.getLightU(),
+            VulkanLightContextUtil.getLightV()
         );
         ci.cancel();
     }
-}
+}   

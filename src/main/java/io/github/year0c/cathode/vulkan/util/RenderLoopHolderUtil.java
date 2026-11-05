@@ -1,6 +1,8 @@
-package io.github.year0c.cathode.vulkan;
+package io.github.year0c.cathode.vulkan.util;
 
-public class RenderLoopHolder {
+import io.github.year0c.cathode.vulkan.RenderLoop;
+
+public class RenderLoopHolderUtil {
     private static RenderLoop instance;
 
     public static void set(RenderLoop rl) { instance = rl; }

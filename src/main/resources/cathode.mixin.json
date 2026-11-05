@@ -3,7 +3,13 @@
   "minVersion": "0.8",
   "package": "io.github.year0c.cathode.mixin",
   "compatibilityLevel": "JAVA_25",
-  "mixins": ["MinecraftMixin", "TesselatorMixin", "BlockRendererMixin"],
+  "mixins": [
+    "MinecraftMixin",
+    "TesselatorMixin",
+    "bugfixin/WorldLightUpdateMixin",
+    "bugfixin/DistanceChunkSorterMixin",
+    "bugfixin/DirtyChunkSorterMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

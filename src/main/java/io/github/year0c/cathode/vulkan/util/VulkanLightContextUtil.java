@@ -1,6 +1,6 @@
-package io.github.year0c.cathode.vulkan;
+package io.github.year0c.cathode.vulkan.util;
 
-public class VulkanLightContext {
+public class VulkanLightContextUtil {
     private static final ThreadLocal<Float> BRIGHTNESS = ThreadLocal.withInitial(() -> 1.0f);
     private static final ThreadLocal<Float> LIGHT_U = ThreadLocal.withInitial(() -> 0.9375f);
     private static final ThreadLocal<Float> LIGHT_V = ThreadLocal.withInitial(() -> 0.9375f);

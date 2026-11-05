@@ -2,6 +2,9 @@ package io.github.year0c.cathode.mixin;
 
 import net.minecraft.client.Minecraft;
 import io.github.year0c.cathode.vulkan.*;
+import io.github.year0c.cathode.vulkan.util.RenderLoopHolderUtil;
+import io.github.year0c.cathode.vulkan.util.VulkanContextUtil;
+import io.github.year0c.cathode.vulkan.util.WorldHolderUtil;
 import io.github.year0c.cathode.probe.SkyProbe;
 
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,28 +22,28 @@ public abstract class MinecraftMixin {
     @Inject(method = "init", at = @At("TAIL"))
     private void cathode$init(CallbackInfo ci) {
         System.out.println("[Cathode] init hook fired");
-        System.out.println("[Cathode] device=" + VulkanContext.device);
+        System.out.println("[Cathode] device=" + VulkanContextUtil.device);
 
-        if (VulkanContext.device == null) {
-            System.err.println("[Cathode] ABORT: VulkanContext not initialized");
+        if (VulkanContextUtil.device == null) {
+            System.err.println("[Cathode] ABORT: VulkanContextUtil not initialized");
             return;
         }
 
         this.lightmap = new LightmapImage(
-            VulkanContext.device, VulkanContext.physicalDevice,
-            VulkanContext.commandPool, VulkanContext.queue);
+            VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
+            VulkanContextUtil.commandPool, VulkanContextUtil.queue);
 
-        this.pipeline = new WorldPipeline(VulkanContext.device, VulkanContext.renderPass);
+        this.pipeline = new WorldPipeline(VulkanContextUtil.device, VulkanContextUtil.renderPass);
         this.pipeline.initDescriptorSet(
-            VulkanContext.iconImageView, VulkanContext.iconSampler,
+            VulkanContextUtil.iconImageView, VulkanContextUtil.iconSampler,
             lightmap.getImageView(), lightmap.getSampler());
 
         this.renderLoop = new RenderLoop(
-            VulkanContext.device, VulkanContext.physicalDevice,
-            VulkanContext.queue, VulkanContext.commandPool,
+            VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
+            VulkanContextUtil.queue, VulkanContextUtil.commandPool,
             pipeline, lightmap);
 
-        RenderLoopHolder.set(renderLoop);   
+        RenderLoopHolderUtil.set(renderLoop);
         System.out.println("[Cathode] init complete");
     }
 
@@ -48,6 +51,7 @@ public abstract class MinecraftMixin {
     private void cathode$tick(CallbackInfo ci) {
         if (renderLoop == null) return;
         Minecraft mc = (Minecraft) (Object) this;
+        WorldHolderUtil.set(mc.world);
         SkyProbe probe = SkyProbe.getInstance();
         probe.update(mc.world.ticks);
         renderLoop.updateLightmap(probe.getSkyLightFactor(), probe.getBlockLightTint());
@@ -63,7 +67,7 @@ public abstract class MinecraftMixin {
     @Inject(method = "run", at = @At("TAIL"))
     private void cathode$submitFrame(CallbackInfo ci) {
         if (renderLoop == null) return;
-        renderLoop.recordWorldPass(VulkanContext.renderPass, VulkanContext.framebuffer);
+        renderLoop.recordWorldPass(VulkanContextUtil.renderPass, VulkanContextUtil.framebuffer);
         renderLoop.submit();
     }
 }   

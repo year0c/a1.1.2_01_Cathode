@@ -1,4 +1,4 @@
-package io.github.year0c.cathode.vulkan;
+package io.github.year0c.cathode.vulkan.util;
 
 import org.lwjgl.vulkan.*;
 import static org.lwjgl.vulkan.VK10.*;

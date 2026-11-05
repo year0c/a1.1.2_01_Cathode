@@ -4,6 +4,8 @@ import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
+import io.github.year0c.cathode.vulkan.util.VulkanUtil;
+
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.system.MemoryUtil.*;
 import static org.lwjgl.system.MemoryStack.*;
