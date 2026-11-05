@@ -3,7 +3,8 @@ package io.github.year0c.cathode.mixin;
 import net.minecraft.client.render.vertex.Tesselator;
 import net.minecraft.world.World;
 import net.minecraft.block.Block;
-import io.github.year0c.cathode.vulkan.VulkanGroundShader;
+
+import io.github.year0c.cathode.vulkan.VulkanSurfaceShader;
 import io.github.year0c.cathode.vulkan.VulkanLiquidShader;
 import io.github.year0c.cathode.vulkan.util.RenderLoopHolderUtil;
 import io.github.year0c.cathode.vulkan.util.WorldHolderUtil;
@@ -37,7 +38,7 @@ public abstract class TesselatorMixin {
         if (isLiquid) {
             VulkanLiquidShader.push(w, (float) x, (float) y, (float) z, (float) u, (float) v, this.color);
         } else {
-            VulkanGroundShader.push(w, (float) x, (float) y, (float) z, (float) u, (float) v, this.color);
+            VulkanSurfaceShader.push(w, (float) x, (float) y, (float) z, (float) u, (float) v, this.color);
         }
         ci.cancel();
     }

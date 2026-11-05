@@ -6,7 +6,7 @@ import net.minecraft.block.Block;
 import io.github.year0c.cathode.vulkan.util.VulkanLightContextUtil;
 import io.github.year0c.cathode.vulkan.util.RenderLoopHolderUtil;
 
-public class VulkanGroundShader {
+public class VulkanSurfaceShader {
 
     public static void push(World w, float x, float y, float z, float u, float v, int color) {
         int bx = (int) Math.floor(x);
