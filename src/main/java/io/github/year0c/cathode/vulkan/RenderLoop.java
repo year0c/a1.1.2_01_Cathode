@@ -21,6 +21,7 @@ public class RenderLoop {
 
     private final WorldPipeline pipeline;
     private final SkyPipeline skyPipeline;
+    private final LiquidPipeline liquidPipeline;
     private final LightmapImage lightmap;
 
     private long vertexBuffer;
@@ -29,6 +30,12 @@ public class RenderLoop {
     private int vertexCount;
     private long vertexCapacity;
 
+    private long liquidVertexBuffer;
+    private long liquidVertexMemory;
+    private long liquidVertexPtr;
+    private int liquidVertexCount;
+    private long liquidVertexCapacity;
+
     private float viewportWidth;
     private float viewportHeight;
 
@@ -36,13 +43,15 @@ public class RenderLoop {
 
     public RenderLoop(VkDevice device, VkPhysicalDevice physicalDevice,
         VkQueue queue, long commandPool,
-        WorldPipeline pipeline, SkyPipeline skyPipeline, LightmapImage lightmap) {
+        WorldPipeline pipeline, SkyPipeline skyPipeline,
+        LiquidPipeline liquidPipeline, LightmapImage lightmap) {
         this.device = device;
         this.physicalDevice = physicalDevice;
         this.queue = queue;
         this.commandPool = commandPool;
         this.pipeline = pipeline;
         this.skyPipeline = skyPipeline;
+        this.liquidPipeline = liquidPipeline;
         this.lightmap = lightmap;
 
         try (MemoryStack stack = stackPush()) {
@@ -66,6 +75,7 @@ public class RenderLoop {
         fenceInfo.free();
 
         createVertexBuffer(1024 * 1024);
+        createLiquidVertexBuffer(1024 * 1024);
     }
 
     private void createVertexBuffer(long size) {
@@ -113,6 +123,51 @@ public class RenderLoop {
         this.vertexCapacity = size;
     }
 
+    private void createLiquidVertexBuffer(long size) {
+        if (liquidVertexBuffer != 0) {
+            vkDestroyBuffer(device, liquidVertexBuffer, null);
+            vkFreeMemory(device, liquidVertexMemory, null);
+        }
+
+        VkBufferCreateInfo bufInfo = VkBufferCreateInfo.calloc()
+            .sType(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO)
+            .size(size)
+            .usage(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
+            .sharingMode(VK_SHARING_MODE_EXCLUSIVE);
+
+        long[] bufOut = new long[1];
+        vkCreateBuffer(device, bufInfo, null, bufOut);
+        this.liquidVertexBuffer = bufOut[0];
+        bufInfo.free();
+
+        VkMemoryRequirements req = VkMemoryRequirements.calloc();
+        vkGetBufferMemoryRequirements(device, liquidVertexBuffer, req);
+
+        int memType = VulkanUtil.findMemoryType(physicalDevice, req.memoryTypeBits(),
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        VkMemoryAllocateInfo alloc = VkMemoryAllocateInfo.calloc()
+            .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
+            .allocationSize(req.size())
+            .memoryTypeIndex(memType);
+
+        long[] memOut = new long[1];
+        vkAllocateMemory(device, alloc, null, memOut);
+        this.liquidVertexMemory = memOut[0];
+        alloc.free();
+        req.free();
+
+        vkBindBufferMemory(device, liquidVertexBuffer, liquidVertexMemory, 0);
+
+        try (MemoryStack stack = stackPush()) {
+            PointerBuffer ptr = stack.callocPointer(1);
+            vkMapMemory(device, liquidVertexMemory, 0, size, 0, ptr);
+            this.liquidVertexPtr = ptr.get(0);
+        }
+
+        this.liquidVertexCapacity = size;
+    }
+
     public void pushVertex(float x, float y, float z,
         float r, float g, float b, float a,
         float u, float v,
@@ -136,15 +191,44 @@ public class RenderLoop {
         vertexCount++;
     }
 
+    public void pushLiquidVertex(float x, float y, float z,
+        float r, float g, float b, float a,
+        float u, float v,
+        float lightU, float lightV) {
+        int offset = liquidVertexCount * 44;
+        if (offset + 44 > liquidVertexCapacity) {
+            growLiquidVertexBuffer();
+            return;
+        }
+        memPutFloat(liquidVertexPtr + offset + 0, x);
+        memPutFloat(liquidVertexPtr + offset + 4, y);
+        memPutFloat(liquidVertexPtr + offset + 8, z);
+        memPutFloat(liquidVertexPtr + offset + 12, r);
+        memPutFloat(liquidVertexPtr + offset + 16, g);
+        memPutFloat(liquidVertexPtr + offset + 20, b);
+        memPutFloat(liquidVertexPtr + offset + 24, a);
+        memPutFloat(liquidVertexPtr + offset + 28, u);
+        memPutFloat(liquidVertexPtr + offset + 32, v);
+        memPutFloat(liquidVertexPtr + offset + 36, lightU);
+        memPutFloat(liquidVertexPtr + offset + 40, lightV);
+        liquidVertexCount++;
+    }
+
     private void growVertexBuffer() {
         long newSize = vertexCapacity * 2;
         createVertexBuffer(newSize);
+    }
+
+    private void growLiquidVertexBuffer() {
+        long newSize = liquidVertexCapacity * 2;
+        createLiquidVertexBuffer(newSize);
     }
 
     public void beginFrame(float width, float height) {
         this.viewportWidth = width;
         this.viewportHeight = height;
         this.vertexCount = 0;
+        this.liquidVertexCount = 0;
     }
 
     public void updateSkyUniforms(float camX, float camY, float camZ, float fov, float aspect) {
@@ -160,7 +244,11 @@ public class RenderLoop {
             VulkanShader.fogColor,
             VulkanShader.fogDensity
         );
-    }   
+        liquidPipeline.updateFogUniforms(
+            VulkanShader.fogColor,
+            VulkanShader.fogDensity
+        );
+    }
 
     public void recordWorldPass(long renderPass, long framebuffer) {
         VkCommandBufferBeginInfo beginInfo = VkCommandBufferBeginInfo.calloc()
@@ -171,7 +259,6 @@ public class RenderLoop {
 
         lightmap.upload(lightmapPixels, cmd);
 
-        // Render pass
         VkOffset2D offset = VkOffset2D.calloc();
         offset.x(0);
         offset.y(0);
@@ -231,7 +318,7 @@ public class RenderLoop {
 
         vkCmdDraw(cmd, 3, 1, 0, 0);
 
-        // === WORLD ===
+        // === WORLD (opaque) ===
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.getPipeline());
 
         java.nio.LongBuffer sets = memAllocLong(1);
@@ -264,11 +351,9 @@ public class RenderLoop {
         VkOffset2D scissorOffset = VkOffset2D.calloc();
         scissorOffset.x(0);
         scissorOffset.y(0);
-
         VkExtent2D scissorExtent = VkExtent2D.calloc();
         scissorExtent.width((int) viewportWidth);
         scissorExtent.height((int) viewportHeight);
-
         VkRect2D.Buffer scissors = VkRect2D.calloc(1);
         scissors.get(0)
             .offset(scissorOffset)
@@ -279,6 +364,30 @@ public class RenderLoop {
         scissorOffset.free();
 
         vkCmdDraw(cmd, vertexCount, 1, 0, 0);
+
+        // === LIQUID (translucent) ===
+        if (liquidVertexCount > 0) {
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, liquidPipeline.getPipeline());
+
+            java.nio.LongBuffer liqSets = memAllocLong(1);
+            liqSets.put(0, liquidPipeline.getDescriptorSet());
+            liqSets.limit(1);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                liquidPipeline.getPipelineLayout(), 0, liqSets, null);
+            memFree(liqSets);
+
+            java.nio.LongBuffer liqBufs = memAllocLong(1);
+            liqBufs.put(0, liquidVertexBuffer);
+            liqBufs.limit(1);
+            java.nio.LongBuffer liqOffsets = memAllocLong(1);
+            liqOffsets.put(0, 0);
+            liqOffsets.limit(1);
+            vkCmdBindVertexBuffers(cmd, 0, liqBufs, liqOffsets);
+            memFree(liqBufs);
+            memFree(liqOffsets);
+
+            vkCmdDraw(cmd, liquidVertexCount, 1, 0, 0);
+        }
 
         vkCmdEndRenderPass(cmd);
         vkEndCommandBuffer(cmd);
@@ -329,5 +438,7 @@ public class RenderLoop {
         vkDestroyFence(device, fence, null);
         vkFreeMemory(device, vertexMemory, null);
         vkDestroyBuffer(device, vertexBuffer, null);
+        vkFreeMemory(device, liquidVertexMemory, null);
+        vkDestroyBuffer(device, liquidVertexBuffer, null);
     }
 }   

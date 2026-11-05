@@ -33,13 +33,23 @@ public abstract class TesselatorMixin {
         float b = (c & 0xFF) / 255.0f;
         float a = ((c >> 24) & 0xFF) / 255.0f;
 
-        RenderLoopHolderUtil.get().pushVertex(
-            (float) x, (float) y, (float) z,
-            r, g, b, a,
-            (float) u, (float) v,
-            VulkanLightContextUtil.getLightU(),
-            VulkanLightContextUtil.getLightV()
-        );
+        if (VulkanLightContextUtil.isLiquid()) {
+            RenderLoopHolderUtil.get().pushLiquidVertex(
+                (float) x, (float) y, (float) z,
+                r, g, b, a,
+                (float) u, (float) v,
+                VulkanLightContextUtil.getLightU(),
+                VulkanLightContextUtil.getLightV()
+            );
+        } else {
+            RenderLoopHolderUtil.get().pushVertex(
+                (float) x, (float) y, (float) z,
+                r, g, b, a,
+                (float) u, (float) v,
+                VulkanLightContextUtil.getLightU(),
+                VulkanLightContextUtil.getLightV()
+            );
+        }
         ci.cancel();
     }
 }   

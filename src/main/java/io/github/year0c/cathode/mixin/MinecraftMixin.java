@@ -18,6 +18,7 @@ public abstract class MinecraftMixin {
     private LightmapImage lightmap;
     private WorldPipeline pipeline;
     private SkyPipeline skyPipeline;
+    private LiquidPipeline liquidPipeline;
     private RenderLoop renderLoop;
 
     @Inject(method = "init", at = @At("TAIL"))
@@ -36,16 +37,26 @@ public abstract class MinecraftMixin {
 
         this.pipeline = new WorldPipeline(
             VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
-            VulkanContextUtil.renderPass);   
+            VulkanContextUtil.renderPass);
+        this.pipeline.initDescriptorSet(
+            VulkanContextUtil.iconImageView, VulkanContextUtil.iconSampler,
+            lightmap.getImageView(), lightmap.getSampler());
 
         this.skyPipeline = new SkyPipeline(
             VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
             VulkanContextUtil.renderPass);
 
+        this.liquidPipeline = new LiquidPipeline(
+            VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
+            VulkanContextUtil.renderPass);
+        this.liquidPipeline.initDescriptorSet(
+            VulkanContextUtil.iconImageView, VulkanContextUtil.iconSampler,
+            lightmap.getImageView(), lightmap.getSampler());
+
         this.renderLoop = new RenderLoop(
             VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
             VulkanContextUtil.queue, VulkanContextUtil.commandPool,
-            pipeline, skyPipeline, lightmap);
+            pipeline, skyPipeline, liquidPipeline, lightmap);
 
         RenderLoopHolderUtil.set(renderLoop);
         System.out.println("[Cathode] init complete");
@@ -69,7 +80,6 @@ public abstract class MinecraftMixin {
         renderLoop.beginFrame(mc.width, mc.height);
         float aspect = (float) mc.width / (float) mc.height;
 
-        // Fog density from viewDistance (chunks → blocks)
         int chunks = mc.options.viewDistance;
         if (chunks < 2) chunks = 2;
         VulkanShader.fogDensity = 1.0f / (chunks * 16.0f);
@@ -81,7 +91,7 @@ public abstract class MinecraftMixin {
             70.0f,
             aspect
         );
-    }   
+    }
 
     @Inject(method = "run", at = @At("TAIL"))
     private void cathode$submitFrame(CallbackInfo ci) {
