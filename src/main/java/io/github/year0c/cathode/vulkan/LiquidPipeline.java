@@ -21,11 +21,11 @@ public class LiquidPipeline {
     private long pipeline;
     private long descriptorPool;
     private long descriptorSet;
-    private long fogBuffer;
-    private long fogMemory;
-    private long fogPtr;
+    private long uniformBuffer;
+    private long uniformMemory;
+    private long uniformPtr;
 
-    private static final int FOG_SIZE = 20; // vec3 fogColor + float fogDensity + float time
+    private static final int UNIFORM_SIZE = 96; // mat4(64) + vec3(12) + float(4) + vec3(12) + float(4)
 
     public LiquidPipeline(VkDevice device, VkPhysicalDevice physicalDevice, long renderPass) {
         this.device = device;
@@ -36,7 +36,7 @@ public class LiquidPipeline {
         createPipelineLayout();
         createPipeline();
         createDescriptorPool();
-        createFogBuffer();
+        createUniformBuffer();
     }
 
     private void createDescriptorSetLayout() {
@@ -258,20 +258,20 @@ public class LiquidPipeline {
         sizes.free();
     }
 
-    private void createFogBuffer() {
+    private void createUniformBuffer() {
         VkBufferCreateInfo bufInfo = VkBufferCreateInfo.calloc()
             .sType(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO)
-            .size(FOG_SIZE)
+            .size(UNIFORM_SIZE)
             .usage(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
             .sharingMode(VK_SHARING_MODE_EXCLUSIVE);
 
         long[] bufOut = new long[1];
         vkCreateBuffer(device, bufInfo, null, bufOut);
-        this.fogBuffer = bufOut[0];
+        this.uniformBuffer = bufOut[0];
         bufInfo.free();
 
         VkMemoryRequirements req = VkMemoryRequirements.calloc();
-        vkGetBufferMemoryRequirements(device, fogBuffer, req);
+        vkGetBufferMemoryRequirements(device, uniformBuffer, req);
 
         int memType = VulkanUtil.findMemoryType(physicalDevice, req.memoryTypeBits(),
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -283,16 +283,16 @@ public class LiquidPipeline {
 
         long[] memOut = new long[1];
         vkAllocateMemory(device, alloc, null, memOut);
-        this.fogMemory = memOut[0];
+        this.uniformMemory = memOut[0];
         alloc.free();
         req.free();
 
-        vkBindBufferMemory(device, fogBuffer, fogMemory, 0);
+        vkBindBufferMemory(device, uniformBuffer, uniformMemory, 0);
 
         try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
             org.lwjgl.PointerBuffer ptr = stack.callocPointer(1);
-            vkMapMemory(device, fogMemory, 0, FOG_SIZE, 0, ptr);
-            this.fogPtr = ptr.get(0);
+            vkMapMemory(device, uniformMemory, 0, UNIFORM_SIZE, 0, ptr);
+            this.uniformPtr = ptr.get(0);
         }
     }
 
@@ -325,11 +325,11 @@ public class LiquidPipeline {
             .sampler(lightmapSampler)
             .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-        VkDescriptorBufferInfo.Buffer fogBufInfo = VkDescriptorBufferInfo.calloc(1);
-        fogBufInfo.get(0)
-            .buffer(fogBuffer)
+        VkDescriptorBufferInfo.Buffer bufInfo = VkDescriptorBufferInfo.calloc(1);
+        bufInfo.get(0)
+            .buffer(uniformBuffer)
             .offset(0)
-            .range(FOG_SIZE);
+            .range(UNIFORM_SIZE);
 
         VkWriteDescriptorSet.Buffer writes = VkWriteDescriptorSet.calloc(3);
         writes.get(0)
@@ -352,21 +352,31 @@ public class LiquidPipeline {
             .dstBinding(2)
             .descriptorType(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
             .descriptorCount(1)
-            .pBufferInfo(fogBufInfo);
+            .pBufferInfo(bufInfo);
 
         vkUpdateDescriptorSets(device, writes, null);
         writes.free();
         iconInfos.free();
         lightmapInfos.free();
-        fogBufInfo.free();
+        bufInfo.free();
     }
 
-    public void updateUniforms(float[] fogColor, float fogDensity, float time) {
-        memPutFloat(fogPtr + 0, fogColor[0]);
-        memPutFloat(fogPtr + 4, fogColor[1]);
-        memPutFloat(fogPtr + 8, fogColor[2]);
-        memPutFloat(fogPtr + 12, fogDensity);
-        memPutFloat(fogPtr + 16, time);
+    /**
+     * Update the 96-byte uniform buffer.
+     * Layout: mat4 viewProjection(64) | vec3 fogColor(12) | float fogDensity(4) | vec3 camPos(12) | float time(4)
+     */
+    public void updateUniforms(float[] mvp, float[] fogColor, float fogDensity,
+                               float camX, float camY, float camZ, float time) {
+        for (int i = 0; i < 16; i++)
+            memPutFloat(uniformPtr + i * 4, mvp[i]);
+        memPutFloat(uniformPtr + 64, fogColor[0]);
+        memPutFloat(uniformPtr + 68, fogColor[1]);
+        memPutFloat(uniformPtr + 72, fogColor[2]);
+        memPutFloat(uniformPtr + 76, fogDensity);
+        memPutFloat(uniformPtr + 80, camX);
+        memPutFloat(uniformPtr + 84, camY);
+        memPutFloat(uniformPtr + 88, camZ);
+        memPutFloat(uniformPtr + 92, time);
     }
 
     public long getPipeline()       { return pipeline; }
@@ -402,8 +412,8 @@ public class LiquidPipeline {
         vkDestroyDescriptorPool(device, descriptorPool, null);
         vkDestroyPipelineLayout(device, pipelineLayout, null);
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, null);
-        vkUnmapMemory(device, fogMemory);
-        vkFreeMemory(device, fogMemory, null);
-        vkDestroyBuffer(device, fogBuffer, null);
+        vkUnmapMemory(device, uniformMemory);
+        vkFreeMemory(device, uniformMemory, null);
+        vkDestroyBuffer(device, uniformBuffer, null);
     }
 }   

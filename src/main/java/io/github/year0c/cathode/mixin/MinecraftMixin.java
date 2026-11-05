@@ -1,8 +1,9 @@
 package io.github.year0c.cathode.mixin;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.World;
+
 import io.github.year0c.cathode.vulkan.*;
-import io.github.year0c.cathode.vulkan.util.RenderLoopHolderUtil;
 import io.github.year0c.cathode.vulkan.util.VulkanContextUtil;
 import io.github.year0c.cathode.vulkan.util.VulkanUtil;
 import io.github.year0c.cathode.vulkan.util.WorldHolderUtil;
@@ -21,47 +22,8 @@ public abstract class MinecraftMixin {
     private SkyPipeline skyPipeline;
     private LiquidPipeline liquidPipeline;
     private RenderLoop renderLoop;
-
-    @Inject(method = "init", at = @At("TAIL"))
-    private void cathode$init(CallbackInfo ci) {
-        System.out.println("[Cathode] init hook fired");
-        System.out.println("[Cathode] device=" + VulkanContextUtil.device);
-
-        if (VulkanContextUtil.device == null) {
-            System.err.println("[Cathode] ABORT: VulkanContextUtil not initialized");
-            return;
-        }
-
-        this.lightmap = new LightmapImage(
-            VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
-            VulkanContextUtil.commandPool, VulkanContextUtil.queue);
-
-        this.pipeline = new WorldPipeline(
-            VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
-            VulkanContextUtil.renderPass);
-        this.pipeline.initDescriptorSet(
-            VulkanContextUtil.iconImageView, VulkanContextUtil.iconSampler,
-            lightmap.getImageView(), lightmap.getSampler());
-
-        this.skyPipeline = new SkyPipeline(
-            VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
-            VulkanContextUtil.renderPass);
-
-        this.liquidPipeline = new LiquidPipeline(
-            VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
-            VulkanContextUtil.renderPass);
-        this.liquidPipeline.initDescriptorSet(
-            VulkanContextUtil.iconImageView, VulkanContextUtil.iconSampler,
-            lightmap.getImageView(), lightmap.getSampler());
-
-        this.renderLoop = new RenderLoop(
-            VulkanContextUtil.device, VulkanContextUtil.physicalDevice,
-            VulkanContextUtil.queue, VulkanContextUtil.commandPool,
-            pipeline, skyPipeline, liquidPipeline, lightmap);
-
-        RenderLoopHolderUtil.set(renderLoop);
-        System.out.println("[Cathode] init complete");
-    }
+    private SectionManager sectionManager;
+    private boolean vkcInit = false;
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void cathode$tick(CallbackInfo ci) {
@@ -76,28 +38,82 @@ public abstract class MinecraftMixin {
 
     @Inject(method = "run", at = @At("HEAD"))
     private void cathode$beginFrame(CallbackInfo ci) {
-        if (renderLoop == null) return;
+        System.out.println("[Cathode] gate check: device=" + VulkanContextUtil.getDevice());   
         Minecraft mc = (Minecraft) (Object) this;
+
+        if (!vkcInit) {
+            System.out.println("[Cathode] gate check: device=" + VulkanContextUtil.getDevice());   
+            if (VulkanContextUtil.getDevice() == null) return;
+            vkcInit = true;
+
+            this.lightmap = new LightmapImage(
+                VulkanContextUtil.getDevice(), VulkanContextUtil.getPhysicalDevice(),
+                VulkanContextUtil.getCommandPool(), VulkanContextUtil.getQueue());
+
+            this.pipeline = new WorldPipeline(
+                VulkanContextUtil.getDevice(), VulkanContextUtil.getPhysicalDevice(),
+                VulkanContextUtil.getRenderPass());
+            this.pipeline.initDescriptorSet(
+                VulkanContextUtil.getIconImageView(), VulkanContextUtil.getIconSampler(),
+                lightmap.getImageView(), lightmap.getSampler());
+
+            this.skyPipeline = new SkyPipeline(
+                VulkanContextUtil.getDevice(), VulkanContextUtil.getPhysicalDevice(),
+                VulkanContextUtil.getRenderPass());
+
+            this.liquidPipeline = new LiquidPipeline(
+                VulkanContextUtil.getDevice(), VulkanContextUtil.getPhysicalDevice(),
+                VulkanContextUtil.getRenderPass());
+            this.liquidPipeline.initDescriptorSet(
+                VulkanContextUtil.getIconImageView(), VulkanContextUtil.getIconSampler(),
+                lightmap.getImageView(), lightmap.getSampler());
+
+            this.renderLoop = new RenderLoop(
+                VulkanContextUtil.getDevice(), VulkanContextUtil.getPhysicalDevice(),
+                VulkanContextUtil.getQueue(), VulkanContextUtil.getCommandPool(),
+                pipeline, skyPipeline, liquidPipeline, lightmap);
+
+            this.sectionManager = new SectionManager(
+                VulkanContextUtil.getDevice(), VulkanContextUtil.getPhysicalDevice());
+            SectionManager.setInstance(this.sectionManager);
+
+            System.out.println("[Cathode] init complete");
+            return;
+        }
+
+        if (renderLoop == null) return;
+
         renderLoop.beginFrame(mc.width, mc.height);
-        float aspect = (float) mc.width / (float) mc.height;
 
         int chunks = mc.options.viewDistance;
         if (chunks < 2) chunks = 2;
         VulkanUtil.fogDensity = 1.0f / (chunks * 16.0f);
 
-        renderLoop.updateSkyUniforms(
+        renderLoop.updateAllUniforms(
             (float) mc.player.x,
             (float) mc.player.y,
             (float) mc.player.z,
             70.0f,
-            aspect
+            (float) mc.width / (float) mc.height,
+            mc.player.yaw,
+            mc.player.pitch
         );
+
+        World w = mc.world;
+        if (w != null) {
+            int px = (int) mc.player.x >> 4;
+            int py = (int) mc.player.y >> 4;
+            int pz = (int) mc.player.z >> 4;
+
+            sectionManager.rebuildDirty(w, px, py, pz, chunks);
+            renderLoop.setVisibleSections(sectionManager.getVisible(px, py, pz, chunks));
+        }
     }
 
     @Inject(method = "run", at = @At("TAIL"))
     private void cathode$submitFrame(CallbackInfo ci) {
         if (renderLoop == null) return;
-        renderLoop.recordWorldPass(VulkanContextUtil.renderPass, VulkanContextUtil.framebuffer);
+        renderLoop.recordWorldPass(VulkanContextUtil.getRenderPass(), VulkanContextUtil.getFramebuffer());
         renderLoop.submit();
     }
 }   

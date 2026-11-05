@@ -14,7 +14,7 @@ import java.util.Map;
 
 import org.lwjgl.sdl.SDLVulkan;
 
-import org.jspecify.annotations.Nullable;   
+import org.jspecify.annotations.Nullable;
 
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK12.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
@@ -118,7 +118,7 @@ public class GL11 {
     public static final int GL_CURRENT_NORMAL = 0x0B02;
 
     // ═══════════════════════════════════════════
-    //  GL STATE
+    //  GL STATE (stays in GL11)
     // ═══════════════════════════════════════════
 
     private static final float[][] modelviewStack = new float[32][16];
@@ -162,78 +162,21 @@ public class GL11 {
     private static float curU = 0f, curV = 0f;
     private static float curNx = 0f, curNy = 1f, curNz = 0f;
 
-    // ═══════════════════════════════════════════
-    //  VULKAN STATE
-    // ═══════════════════════════════════════════
-
     private static final int IN_FLIGHT_FRAMES = 3;
-
-    @Nullable private static VkInstance instance;
-    @Nullable private static VkPhysicalDevice physicalDevice;
-    @Nullable private static VkDevice device;
-    @Nullable private static VkCommandBuffer[] commandBuffers;
-    @Nullable private static VkQueue graphicsQueue;
-
-    private static long surface;
-    private static int gfxFamily = 0;
-    private static long commandPool;
-
-    private static long swapchain;
-    private static int swapchainImageCount;
-    private static long[] swapchainImages;
-    private static long[] swapchainImageViews;
-    private static int swapchainFormat;
-    private static int width = 854, height = 480;
-
-    private static long depthImage;
-    private static long depthView;
-    private static long depthMemory;
-
-    private static long[] inFlightFences;
-    private static long[] imageAvailableSemaphores;
-    private static long[] renderFinishedSemaphores;
-    private static int currentFrame = 0;
-    private static int currentImageIndex = 0;
-
-    private static long stagingBuffer;
-    private static long stagingMemory;
-    private static long stagingPtr;
-    private static long vertexBuffer;
-    private static long vertexMemory;
-
-    private static long vertShader;
-    private static long fragShader;
-    private static long pipelineLayout;
-    private static long descriptorSetLayout;
-    private static long descriptorPool;
-
-    private static long uniformBuffer;
-    private static long uniformMemory;
-    private static long uniformPtr;
-
-    private static long sampler;
-    private static final Map<Integer, Long> textureImages = new HashMap<>();
-    private static final Map<Integer, Long> textureImageViews = new HashMap<>();
-    private static final Map<Integer, Long> textureMemory = new HashMap<>();
-    private static final Map<Integer, Long> descriptorSets = new HashMap<>();
-
-    private static final Map<Long, Long> pipelineCache = new HashMap<>();
-
-    private static boolean initialized = false;
 
     static {
         identity(modelviewStack[0]);
         identity(projectionStack[0]);
         identity(textureStack[0]);
     }
-
+    
     // ═══════════════════════════════════════════
     //  VULKAN INIT
     // ═══════════════════════════════════════════
 
     public static void initVulkan(long sdlWindow, int w, int h) throws Exception {
-        width = w;
-        height = h;
+        GL11Util.width = w;
+        GL11Util.height = h;
         createInstance();
         createSurface(sdlWindow);
         pickPhysicalDevice();
@@ -249,7 +192,10 @@ public class GL11 {
         createShaders();
         createPipelineLayout();
         createSampler();
-        initialized = true;
+        createRenderPass();
+        createIcon();
+        GL11Util.initialized = true;
+        System.out.println("[GL11] Vulkan init done, device=" + GL11Util.device + " renderPass=" + GL11Util.renderPass + " icon=" + GL11Util.iconImageView);   
     }
 
     private static void createInstance() throws Exception {
@@ -272,41 +218,41 @@ public class GL11 {
                 .pApplicationInfo(appInfo)
                 .ppEnabledExtensionNames(extPtrs);
 
-            PointerBuffer instPtr = stack.mallocPointer(1);   
+            PointerBuffer instPtr = stack.mallocPointer(1);
             int result = vkCreateInstance(ci, null, instPtr);
             if (result != VK_SUCCESS) throw new RuntimeException("vkCreateInstance: " + result);
-            instance = new VkInstance(instPtr.get(0), ci);   
+            GL11Util.instance = new VkInstance(instPtr.get(0), ci);
         }
     }
 
     private static void createSurface(long sdlWindow) throws Exception {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             LongBuffer surfBuf = stack.mallocLong(1);
-            boolean ok = SDLVulkan.SDL_Vulkan_CreateSurface(sdlWindow, instance, null, surfBuf);
+            boolean ok = SDLVulkan.SDL_Vulkan_CreateSurface(sdlWindow, GL11Util.instance, null, surfBuf);
             if (!ok) throw new RuntimeException("SDL_Vulkan_CreateSurface failed");
-            surface = surfBuf.get(0);
+            GL11Util.surface = surfBuf.get(0);
         }
-    }   
+    }
 
     private static void pickPhysicalDevice() {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer count = stack.mallocInt(1).put(0, 0);
-            vkEnumeratePhysicalDevices(instance, count, null);
+            vkEnumeratePhysicalDevices(GL11Util.instance, count, null);
             PointerBuffer devices = stack.mallocPointer(count.get(0));
-            vkEnumeratePhysicalDevices(instance, count, devices);
-            physicalDevice = new VkPhysicalDevice(devices.get(0), instance);
+            vkEnumeratePhysicalDevices(GL11Util.instance, count, devices);
+            GL11Util.physicalDevice = new VkPhysicalDevice(devices.get(0), GL11Util.instance);
         }
-    }   
+    }
 
     private static void createDevice() throws Exception {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer qCount = stack.mallocInt(1).put(0, 0);
-            vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, qCount, null);
-            VkQueueFamilyProperties.Buffer families = VkQueueFamilyProperties.malloc(qCount.get(0));   
-            vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, qCount, families);
-            gfxFamily = 0;
+            vkGetPhysicalDeviceQueueFamilyProperties(GL11Util.physicalDevice, qCount, null);
+            VkQueueFamilyProperties.Buffer families = VkQueueFamilyProperties.malloc(qCount.get(0));
+            vkGetPhysicalDeviceQueueFamilyProperties(GL11Util.physicalDevice, qCount, families);
+            GL11Util.gfxFamily = 0;
             for (int i = 0; i < qCount.get(0); i++) {
-                if ((families.get(i).queueFlags() & VK_QUEUE_GRAPHICS_BIT) != 0) { gfxFamily = i; break; }
+                if ((families.get(i).queueFlags() & VK_QUEUE_GRAPHICS_BIT) != 0) { GL11Util.gfxFamily = i; break; }
             }
 
             VkPhysicalDeviceVulkan13Features v13 = VkPhysicalDeviceVulkan13Features.calloc(stack)
@@ -319,51 +265,51 @@ public class GL11 {
             for (int i = 0; i < devExts.length; i++)
                 devExtPtrs.put(i, MemoryUtil.memAddress(stack.UTF8(devExts[i])));
 
-            VkDeviceQueueCreateInfo.Buffer qcis = VkDeviceQueueCreateInfo.malloc(1);   
+            VkDeviceQueueCreateInfo.Buffer qcis = VkDeviceQueueCreateInfo.malloc(1);
             qcis.get(0)
                 .sType(VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO)
-                .queueFamilyIndex(gfxFamily)
+                .queueFamilyIndex(GL11Util.gfxFamily)
                 .pQueuePriorities(stack.mallocFloat(1).put(0, 1.0f));
 
             VkDeviceCreateInfo dci = VkDeviceCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO)
                 .pNext(v13)
                 .pQueueCreateInfos(qcis)
-                .ppEnabledExtensionNames(devExtPtrs);   
+                .ppEnabledExtensionNames(devExtPtrs);
 
             PointerBuffer devPtr = stack.mallocPointer(1);
-            int result = vkCreateDevice(physicalDevice, dci, null, devPtr);
+            int result = vkCreateDevice(GL11Util.physicalDevice, dci, null, devPtr);
             if (result != VK_SUCCESS) throw new RuntimeException("vkCreateDevice: " + result);
-            device = new VkDevice(devPtr.get(0), physicalDevice, dci, VK_API_VERSION_1_3);   
+            GL11Util.device = new VkDevice(devPtr.get(0), GL11Util.physicalDevice, dci, VK_API_VERSION_1_3);
             PointerBuffer qPtr = stack.mallocPointer(1);
-            vkGetDeviceQueue(device, gfxFamily, 0, qPtr);
-            graphicsQueue = new VkQueue(qPtr.get(0), device);
+            vkGetDeviceQueue(GL11Util.device, GL11Util.gfxFamily, 0, qPtr);
+            GL11Util.graphicsQueue = new VkQueue(qPtr.get(0), GL11Util.device);
         }
-    }   
+    }
 
     private static void createCommandPool() {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkCommandPoolCreateInfo ci = VkCommandPoolCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO)
                 .flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT)
-                .queueFamilyIndex(gfxFamily);
+                .queueFamilyIndex(GL11Util.gfxFamily);
             LongBuffer poolPtr = stack.mallocLong(1);
-            vkCreateCommandPool(device, ci, null, poolPtr);
-            commandPool = poolPtr.get(0);   
+            vkCreateCommandPool(GL11Util.device, ci, null, poolPtr);
+            GL11Util.commandPool = poolPtr.get(0);
         }
     }
 
     private static void createSwapchain() throws Exception {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkSurfaceCapabilitiesKHR caps = VkSurfaceCapabilitiesKHR.calloc(stack);
-            vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, caps);
+            vkGetPhysicalDeviceSurfaceCapabilitiesKHR(GL11Util.physicalDevice, GL11Util.surface, caps);
 
             int fmtFormat = VK_FORMAT_B8G8R8A8_SRGB;
             int fmtColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
             int extW = (int) caps.currentExtent().width();
             int extH = (int) caps.currentExtent().height();
-            if (extW == 0xFFFFFFFF) { extW = width; extH = height; }
+            if (extW == 0xFFFFFFFF) { extW = GL11Util.width; extH = GL11Util.height; }
 
             int imgCount = caps.minImageCount() + 1;
             if (caps.maxImageCount() > 0 && imgCount > caps.maxImageCount()) imgCount = caps.maxImageCount();
@@ -371,7 +317,7 @@ public class GL11 {
             VkExtent2D extent = VkExtent2D.calloc(stack).width(extW).height(extH);
             VkSwapchainCreateInfoKHR sci = VkSwapchainCreateInfoKHR.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR)
-                .surface(surface)
+                .surface(GL11Util.surface)
                 .minImageCount(imgCount)
                 .imageFormat(fmtFormat)
                 .imageColorSpace(fmtColorSpace)
@@ -386,29 +332,29 @@ public class GL11 {
                 .oldSwapchain(VK_NULL_HANDLE);
 
             LongBuffer swapPtr = stack.mallocLong(1);
-            int result = vkCreateSwapchainKHR(device, sci, null, swapPtr);
+            int result = vkCreateSwapchainKHR(GL11Util.device, sci, null, swapPtr);
             if (result != VK_SUCCESS) throw new RuntimeException("vkCreateSwapchainKHR: " + result);
-            swapchain = swapPtr.get(0);
-            swapchainFormat = fmtFormat;
-            width = extW;
-            height = extH;
+            GL11Util.swapchain = swapPtr.get(0);
+            GL11Util.swapchainFormat = fmtFormat;
+            GL11Util.width = extW;
+            GL11Util.height = extH;
 
             IntBuffer imgCountBuf = stack.mallocInt(1).put(0, 0);
-            vkGetSwapchainImagesKHR(device, swapchain, imgCountBuf, null);
-            swapchainImageCount = imgCountBuf.get(0);
-            swapchainImages = new long[swapchainImageCount];
-            LongBuffer imgBuf = stack.mallocLong(swapchainImageCount);
-            vkGetSwapchainImagesKHR(device, swapchain, imgCountBuf, imgBuf);
-            for (int i = 0; i < swapchainImageCount; i++)
-                swapchainImages[i] = imgBuf.get(i);
+            vkGetSwapchainImagesKHR(GL11Util.device, GL11Util.swapchain, imgCountBuf, null);
+            GL11Util.swapchainImageCount = imgCountBuf.get(0);
+            GL11Util.swapchainImages = new long[GL11Util.swapchainImageCount];
+            LongBuffer imgBuf = stack.mallocLong(GL11Util.swapchainImageCount);
+            vkGetSwapchainImagesKHR(GL11Util.device, GL11Util.swapchain, imgCountBuf, imgBuf);
+            for (int i = 0; i < GL11Util.swapchainImageCount; i++)
+                GL11Util.swapchainImages[i] = imgBuf.get(i);
 
-            swapchainImageViews = new long[swapchainImageCount];
-            for (int i = 0; i < swapchainImageCount; i++) {
+            GL11Util.swapchainImageViews = new long[GL11Util.swapchainImageCount];
+            for (int i = 0; i < GL11Util.swapchainImageCount; i++) {
                 VkImageViewCreateInfo ivci = VkImageViewCreateInfo.calloc(stack)
                     .sType(VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO)
-                    .image(swapchainImages[i])
+                    .image(GL11Util.swapchainImages[i])
                     .viewType(VK_IMAGE_VIEW_TYPE_2D)
-                    .format(swapchainFormat)
+                    .format(GL11Util.swapchainFormat)
                     .components(c -> c.r(VK_COMPONENT_SWIZZLE_IDENTITY)
                         .g(VK_COMPONENT_SWIZZLE_IDENTITY)
                         .b(VK_COMPONENT_SWIZZLE_IDENTITY)
@@ -419,11 +365,11 @@ public class GL11 {
                         .baseArrayLayer(0)
                         .layerCount(1));
                 LongBuffer viewPtr = stack.mallocLong(1);
-                vkCreateImageView(device, ivci, null, viewPtr);
-                swapchainImageViews[i] = viewPtr.get(0);
+                vkCreateImageView(GL11Util.device, ivci, null, viewPtr);
+                GL11Util.swapchainImageViews[i] = viewPtr.get(0);
             }
         }
-    }   
+    }
 
     private static void createDepthResources() throws Exception {
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -431,51 +377,51 @@ public class GL11 {
                 .sType(VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO)
                 .imageType(VK_IMAGE_TYPE_2D)
                 .format(VK_FORMAT_D32_SFLOAT)
-                .extent(e -> e.width(width).height(height).depth(1))   
+                .extent(e -> e.width(GL11Util.width).height(GL11Util.height).depth(1))
                 .mipLevels(1).arrayLayers(1).samples(VK_SAMPLE_COUNT_1_BIT)
                 .tiling(VK_IMAGE_TILING_OPTIMAL)
                 .usage(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
                 .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
             LongBuffer imgPtr = stack.mallocLong(1);
-            vkCreateImage(device, ici, null, imgPtr);
-            depthImage = imgPtr.get(0);   
+            vkCreateImage(GL11Util.device, ici, null, imgPtr);
+            GL11Util.depthImage = imgPtr.get(0);
 
             VkMemoryRequirements mr = VkMemoryRequirements.calloc(stack);
-            vkGetImageMemoryRequirements(device, depthImage, mr);   
+            vkGetImageMemoryRequirements(GL11Util.device, GL11Util.depthImage, mr);
             VkMemoryAllocateInfo mai = VkMemoryAllocateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
                 .allocationSize(mr.size())
                 .memoryTypeIndex(findMemoryType(mr.memoryTypeBits(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
             LongBuffer memPtr = stack.mallocLong(1);
-            vkAllocateMemory(device, mai, null, memPtr);
-            depthMemory = memPtr.get(0);   
-            vkBindImageMemory(device, depthImage, depthMemory, 0);
+            vkAllocateMemory(GL11Util.device, mai, null, memPtr);
+            GL11Util.depthMemory = memPtr.get(0);
+            vkBindImageMemory(GL11Util.device, GL11Util.depthImage, GL11Util.depthMemory, 0);
 
             VkImageViewCreateInfo ivci = VkImageViewCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO)
-                .image(depthImage)
+                .image(GL11Util.depthImage)
                 .viewType(VK_IMAGE_VIEW_TYPE_2D)
                 .format(VK_FORMAT_D32_SFLOAT)
                 .components(c -> c.r(VK_COMPONENT_SWIZZLE_IDENTITY)
                     .g(VK_COMPONENT_SWIZZLE_IDENTITY)
                     .b(VK_COMPONENT_SWIZZLE_IDENTITY)
-                    .a(VK_COMPONENT_SWIZZLE_IDENTITY))   
+                    .a(VK_COMPONENT_SWIZZLE_IDENTITY))
                 .subresourceRange(r -> r.aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT)
                     .baseMipLevel(0)
                     .levelCount(1)
                     .baseArrayLayer(0)
-                    .layerCount(1));   
+                    .layerCount(1));
             LongBuffer viewPtr = stack.mallocLong(1);
-            vkCreateImageView(device, ivci, null, viewPtr);
-            depthView = viewPtr.get(0);   
+            vkCreateImageView(GL11Util.device, ivci, null, viewPtr);
+            GL11Util.depthView = viewPtr.get(0);
         }
     }
 
     private static void createSyncObjects() {
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            inFlightFences = new long[IN_FLIGHT_FRAMES];
-            imageAvailableSemaphores = new long[IN_FLIGHT_FRAMES];
-            renderFinishedSemaphores = new long[IN_FLIGHT_FRAMES];
+            GL11Util.inFlightFences = new long[IN_FLIGHT_FRAMES];
+            GL11Util.imageAvailableSemaphores = new long[IN_FLIGHT_FRAMES];
+            GL11Util.renderFinishedSemaphores = new long[IN_FLIGHT_FRAMES];
             VkFenceCreateInfo fci = VkFenceCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_FENCE_CREATE_INFO)
                 .flags(VK_FENCE_CREATE_SIGNALED_BIT);
@@ -483,13 +429,13 @@ public class GL11 {
                 .sType(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO);
             LongBuffer ptr = stack.mallocLong(1);
             for (int i = 0; i < IN_FLIGHT_FRAMES; i++) {
-                vkCreateFence(device, fci, null, ptr);
-                inFlightFences[i] = ptr.get(0);
-                vkCreateSemaphore(device, sci, null, ptr);
-                imageAvailableSemaphores[i] = ptr.get(0);
-                vkCreateSemaphore(device, sci, null, ptr);
-                renderFinishedSemaphores[i] = ptr.get(0);
-            }   
+                vkCreateFence(GL11Util.device, fci, null, ptr);
+                GL11Util.inFlightFences[i] = ptr.get(0);
+                vkCreateSemaphore(GL11Util.device, sci, null, ptr);
+                GL11Util.imageAvailableSemaphores[i] = ptr.get(0);
+                vkCreateSemaphore(GL11Util.device, sci, null, ptr);
+                GL11Util.renderFinishedSemaphores[i] = ptr.get(0);
+            }
         }
     }
 
@@ -497,14 +443,14 @@ public class GL11 {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkCommandBufferAllocateInfo cai = VkCommandBufferAllocateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO)
-                .commandPool(commandPool)
+                .commandPool(GL11Util.commandPool)
                 .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
                 .commandBufferCount(IN_FLIGHT_FRAMES);
             PointerBuffer cmdBuf = stack.mallocPointer(IN_FLIGHT_FRAMES);
-            vkAllocateCommandBuffers(device, cai, cmdBuf);
-            commandBuffers = new VkCommandBuffer[IN_FLIGHT_FRAMES];
+            vkAllocateCommandBuffers(GL11Util.device, cai, cmdBuf);
+            GL11Util.commandBuffers = new VkCommandBuffer[IN_FLIGHT_FRAMES];
             for (int i = 0; i < IN_FLIGHT_FRAMES; i++)
-                commandBuffers[i] = new VkCommandBuffer(cmdBuf.get(i), device);   
+                GL11Util.commandBuffers[i] = new VkCommandBuffer(cmdBuf.get(i), GL11Util.device);
         }
     }
 
@@ -517,22 +463,22 @@ public class GL11 {
                 .usage(VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
                 .sharingMode(VK_SHARING_MODE_EXCLUSIVE);
             LongBuffer bufPtr = stack.mallocLong(1);
-            vkCreateBuffer(device, bci, null, bufPtr);
-            stagingBuffer = bufPtr.get(0);
+            vkCreateBuffer(GL11Util.device, bci, null, bufPtr);
+            GL11Util.stagingBuffer = bufPtr.get(0);
 
             VkMemoryRequirements mr = VkMemoryRequirements.calloc(stack);
-            vkGetBufferMemoryRequirements(device, stagingBuffer, mr);
+            vkGetBufferMemoryRequirements(GL11Util.device, GL11Util.stagingBuffer, mr);
             VkMemoryAllocateInfo mai = VkMemoryAllocateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
                 .allocationSize(mr.size())
                 .memoryTypeIndex(findMemoryType(mr.memoryTypeBits(), VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
             LongBuffer memPtr = stack.mallocLong(1);
-            vkAllocateMemory(device, mai, null, memPtr);
-            stagingMemory = memPtr.get(0);
-            vkBindBufferMemory(device, stagingBuffer, stagingMemory, 0);
+            vkAllocateMemory(GL11Util.device, mai, null, memPtr);
+            GL11Util.stagingMemory = memPtr.get(0);
+            vkBindBufferMemory(GL11Util.device, GL11Util.stagingBuffer, GL11Util.stagingMemory, 0);
             PointerBuffer mapped = stack.mallocPointer(1);
-            vkMapMemory(device, stagingMemory, 0, size, 0, mapped);
-            stagingPtr = mapped.get(0);   
+            vkMapMemory(GL11Util.device, GL11Util.stagingMemory, 0, size, 0, mapped);
+            GL11Util.stagingPtr = mapped.get(0);
         }
     }
 
@@ -545,19 +491,19 @@ public class GL11 {
                 .usage(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
                 .sharingMode(VK_SHARING_MODE_EXCLUSIVE);
             LongBuffer bufPtr = stack.mallocLong(1);
-            vkCreateBuffer(device, bci, null, bufPtr);
-            vertexBuffer = bufPtr.get(0);
+            vkCreateBuffer(GL11Util.device, bci, null, bufPtr);
+            GL11Util.vertexBuffer = bufPtr.get(0);
 
             VkMemoryRequirements mr = VkMemoryRequirements.calloc(stack);
-            vkGetBufferMemoryRequirements(device, vertexBuffer, mr);
+            vkGetBufferMemoryRequirements(GL11Util.device, GL11Util.vertexBuffer, mr);
             VkMemoryAllocateInfo mai = VkMemoryAllocateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
                 .allocationSize(mr.size())
                 .memoryTypeIndex(findMemoryType(mr.memoryTypeBits(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
             LongBuffer memPtr = stack.mallocLong(1);
-            vkAllocateMemory(device, mai, null, memPtr);
-            vertexMemory = memPtr.get(0);
-            vkBindBufferMemory(device, vertexBuffer, vertexMemory, 0);
+            vkAllocateMemory(GL11Util.device, mai, null, memPtr);
+            GL11Util.vertexMemory = memPtr.get(0);
+            vkBindBufferMemory(GL11Util.device, GL11Util.vertexBuffer, GL11Util.vertexMemory, 0);
         }
     }
 
@@ -570,22 +516,22 @@ public class GL11 {
                 .usage(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
                 .sharingMode(VK_SHARING_MODE_EXCLUSIVE);
             LongBuffer bufPtr = stack.mallocLong(1);
-            vkCreateBuffer(device, bci, null, bufPtr);
-            uniformBuffer = bufPtr.get(0);
+            vkCreateBuffer(GL11Util.device, bci, null, bufPtr);
+            GL11Util.uniformBuffer = bufPtr.get(0);
 
             VkMemoryRequirements mr = VkMemoryRequirements.calloc(stack);
-            vkGetBufferMemoryRequirements(device, uniformBuffer, mr);
+            vkGetBufferMemoryRequirements(GL11Util.device, GL11Util.uniformBuffer, mr);
             VkMemoryAllocateInfo mai = VkMemoryAllocateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
                 .allocationSize(mr.size())
                 .memoryTypeIndex(findMemoryType(mr.memoryTypeBits(), VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
             LongBuffer memPtr = stack.mallocLong(1);
-            vkAllocateMemory(device, mai, null, memPtr);
-            uniformMemory = memPtr.get(0);
-            vkBindBufferMemory(device, uniformBuffer, uniformMemory, 0);
+            vkAllocateMemory(GL11Util.device, mai, null, memPtr);
+            GL11Util.uniformMemory = memPtr.get(0);
+            vkBindBufferMemory(GL11Util.device, GL11Util.uniformBuffer, GL11Util.uniformMemory, 0);
             PointerBuffer mapped = stack.mallocPointer(1);
-            vkMapMemory(device, uniformMemory, 0, size, 0, mapped);
-            uniformPtr = mapped.get(0);   
+            vkMapMemory(GL11Util.device, GL11Util.uniformMemory, 0, size, 0, mapped);
+            GL11Util.uniformPtr = mapped.get(0);
         }
     }
 
@@ -595,28 +541,28 @@ public class GL11 {
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
             ByteBuffer vCode = stack.malloc(vertSpv.length);
-            vCode.put(vertSpv);   
+            vCode.put(vertSpv);
             VkShaderModuleCreateInfo vsci = VkShaderModuleCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO)
-                .pCode(vCode);   
+                .pCode(vCode);
             LongBuffer vPtr = stack.mallocLong(1);
-            vkCreateShaderModule(device, vsci, null, vPtr);
-            vertShader = vPtr.get(0);
+            vkCreateShaderModule(GL11Util.device, vsci, null, vPtr);
+            GL11Util.vertShader = vPtr.get(0);
 
             ByteBuffer fCode = stack.malloc(fragSpv.length);
-            fCode.put(fragSpv);     
+            fCode.put(fragSpv);
             VkShaderModuleCreateInfo fsci = VkShaderModuleCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO)
-                .pCode(fCode);   
+                .pCode(fCode);
             LongBuffer fPtr = stack.mallocLong(1);
-            vkCreateShaderModule(device, fsci, null, fPtr);
-            fragShader = fPtr.get(0);
+            vkCreateShaderModule(GL11Util.device, fsci, null, fPtr);
+            GL11Util.fragShader = fPtr.get(0);
         }
     }
 
     private static void createPipelineLayout() throws Exception {
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            VkDescriptorSetLayoutBinding.Buffer bindings = VkDescriptorSetLayoutBinding.malloc(2);   
+            VkDescriptorSetLayoutBinding.Buffer bindings = VkDescriptorSetLayoutBinding.malloc(2);
             bindings.get(0)
                 .binding(0)
                 .descriptorType(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
@@ -630,31 +576,31 @@ public class GL11 {
 
             VkDescriptorSetLayoutCreateInfo dslci = VkDescriptorSetLayoutCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO)
-                .pBindings(bindings);   
+                .pBindings(bindings);
             LongBuffer dslPtr = stack.mallocLong(1);
-            vkCreateDescriptorSetLayout(device, dslci, null, dslPtr);
-            descriptorSetLayout = dslPtr.get(0);
+            vkCreateDescriptorSetLayout(GL11Util.device, dslci, null, dslPtr);
+            GL11Util.descriptorSetLayout = dslPtr.get(0);
 
-            LongBuffer layoutPtrs = stack.mallocLong(1).put(0, descriptorSetLayout);
+            LongBuffer layoutPtrs = stack.mallocLong(1).put(0, GL11Util.descriptorSetLayout);
             VkPipelineLayoutCreateInfo plci = VkPipelineLayoutCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO)
                 .setLayoutCount(1)
                 .pSetLayouts(layoutPtrs);
             LongBuffer plPtr = stack.mallocLong(1);
-            vkCreatePipelineLayout(device, plci, null, plPtr);
-            pipelineLayout = plPtr.get(0);
+            vkCreatePipelineLayout(GL11Util.device, plci, null, plPtr);
+            GL11Util.pipelineLayout = plPtr.get(0);
 
-            VkDescriptorPoolSize.Buffer sizes = VkDescriptorPoolSize.malloc(2);   
+            VkDescriptorPoolSize.Buffer sizes = VkDescriptorPoolSize.malloc(2);
             sizes.get(0).type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).descriptorCount(64);
             sizes.get(1).type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(64);
 
             VkDescriptorPoolCreateInfo dpci = VkDescriptorPoolCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO)
                 .maxSets(64)
-                .pPoolSizes(sizes);   
+                .pPoolSizes(sizes);
             LongBuffer dpPtr = stack.mallocLong(1);
-            vkCreateDescriptorPool(device, dpci, null, dpPtr);
-            descriptorPool = dpPtr.get(0);
+            vkCreateDescriptorPool(GL11Util.device, dpci, null, dpPtr);
+            GL11Util.descriptorPool = dpPtr.get(0);
         }
     }
 
@@ -674,10 +620,115 @@ public class GL11 {
                 .maxAnisotropy(1f)
                 .borderColor(VK_BORDER_COLOR_INT_TRANSPARENT_BLACK);
             LongBuffer sPtr = stack.mallocLong(1);
-            vkCreateSampler(device, sci, null, sPtr);
-            sampler = sPtr.get(0);
+            vkCreateSampler(GL11Util.device, sci, null, sPtr);
+            GL11Util.sampler = sPtr.get(0);
         }
     }
+
+    private static void createRenderPass() {
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            VkAttachmentDescription.Buffer atts = VkAttachmentDescription.malloc(2);
+            atts.get(0)
+                .format(GL11Util.swapchainFormat)
+                .samples(VK_SAMPLE_COUNT_1_BIT)
+                .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
+                .storeOp(VK_ATTACHMENT_STORE_OP_STORE)
+                .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE)
+                .stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                .finalLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            atts.get(1)
+                .format(VK_FORMAT_D32_SFLOAT)
+                .samples(VK_SAMPLE_COUNT_1_BIT)
+                .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
+                .storeOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE)
+                .stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                .finalLayout(VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+            VkAttachmentReference.Buffer colorRefs = VkAttachmentReference.malloc(1, stack);
+            colorRefs.get(0).attachment(0).layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+            VkAttachmentReference depthRef = VkAttachmentReference.calloc(stack).attachment(1).layout(VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+            VkSubpassDescription.Buffer subs = VkSubpassDescription.malloc(1, stack);
+            subs.get(0)
+                .pipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS)
+                .colorAttachmentCount(1)
+                .pColorAttachments(colorRefs)
+                .pDepthStencilAttachment(depthRef);
+
+            VkRenderPassCreateInfo rpci = VkRenderPassCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO)
+                .pAttachments(atts)
+                .pSubpasses(subs);   
+
+            LongBuffer ptr = stack.mallocLong(1);
+            vkCreateRenderPass(GL11Util.device, rpci, null, ptr);
+            GL11Util.renderPass = ptr.get(0);
+
+            GL11Util.swapchainFramebuffers = new long[GL11Util.swapchainImageCount];
+            for (int i = 0; i < GL11Util.swapchainImageCount; i++) {
+                LongBuffer views = stack.mallocLong(2);
+                views.put(0, GL11Util.swapchainImageViews[i]);
+                views.put(1, GL11Util.depthView);
+                VkFramebufferCreateInfo fci = VkFramebufferCreateInfo.calloc(stack)
+                    .sType(VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO)
+                    .renderPass(GL11Util.renderPass)
+                    .width(GL11Util.width).height(GL11Util.height).layers(1)
+                    .attachmentCount(2)
+                    .pAttachments(views);
+                LongBuffer fbPtr = stack.mallocLong(1);
+                vkCreateFramebuffer(GL11Util.device, fci, null, fbPtr);
+                GL11Util.swapchainFramebuffers[i] = fbPtr.get(0);
+            }
+        }
+    }
+
+    private static void createIcon() {
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            VkImageCreateInfo ici = VkImageCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO)
+                .imageType(VK_IMAGE_TYPE_2D)
+                .format(VK_FORMAT_R8G8B8_UNORM)
+                .extent(e -> e.width(1).height(1).depth(1))
+                .mipLevels(1).arrayLayers(1).samples(VK_SAMPLE_COUNT_1_BIT)
+                .tiling(VK_IMAGE_TILING_OPTIMAL)
+                .usage(VK_IMAGE_USAGE_SAMPLED_BIT)
+                .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
+            LongBuffer imgPtr = stack.mallocLong(1);
+            vkCreateImage(GL11Util.device, ici, null, imgPtr);
+            long img = imgPtr.get(0);
+
+            VkMemoryRequirements mr = VkMemoryRequirements.calloc(stack);
+            vkGetImageMemoryRequirements(GL11Util.device, img, mr);
+            VkMemoryAllocateInfo mai = VkMemoryAllocateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
+                .allocationSize(mr.size())
+                .memoryTypeIndex(findMemoryType(mr.memoryTypeBits(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+            LongBuffer memPtr = stack.mallocLong(1);
+            vkAllocateMemory(GL11Util.device, mai, null, memPtr);
+            long mem = memPtr.get(0);
+            vkBindImageMemory(GL11Util.device, img, mem, 0);
+
+            VkImageViewCreateInfo ivci = VkImageViewCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO)
+                .image(img)
+                .viewType(VK_IMAGE_VIEW_TYPE_2D)
+                .format(VK_FORMAT_R8G8B8_UNORM)
+                .components(c -> c.r(VK_COMPONENT_SWIZZLE_IDENTITY)
+                    .g(VK_COMPONENT_SWIZZLE_IDENTITY)
+                    .b(VK_COMPONENT_SWIZZLE_IDENTITY)
+                    .a(VK_COMPONENT_SWIZZLE_IDENTITY))
+                .subresourceRange(r -> r.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                    .levelCount(1).layerCount(1));
+            LongBuffer viewPtr = stack.mallocLong(1);
+            vkCreateImageView(GL11Util.device, ivci, null, viewPtr);
+            GL11Util.iconImageView = viewPtr.get(0);
+            GL11Util.iconSampler = GL11Util.sampler;
+        }
+    }   
 
     // ═══════════════════════════════════════════
     //  PIPELINE CREATION
@@ -701,11 +752,11 @@ public class GL11 {
         long key = ((long)topology << 48) | ((long)cull << 40) | ((long)blend << 24)
                  | ((long)depthTest << 20) | ((long)depthWrite << 16) | depthFuncCode;
 
-        Long cached = pipelineCache.get(key);
+        Long cached = GL11Util.pipelineCache.get(key);
         if (cached != null) return cached;
 
         long pipeline = createPipeline(topology, cull, blend, depthTest, depthWrite);
-        pipelineCache.put(key, pipeline);
+        GL11Util.pipelineCache.put(key, pipeline);
         return pipeline;
     }
 
@@ -724,29 +775,29 @@ public class GL11 {
             VkPipelineVertexInputStateCreateInfo viState = VkPipelineVertexInputStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO)
                 .pVertexBindingDescriptions(vbDescs)
-                .pVertexAttributeDescriptions(vaDescs);   
+                .pVertexAttributeDescriptions(vaDescs);
 
             int vkTopo;
-                switch (topology) {
-                    case GL_POINTS: vkTopo = VK_PRIMITIVE_TOPOLOGY_POINT_LIST; break;
-                    case GL_LINES: vkTopo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST; break;
-                    case GL_LINE_LOOP: vkTopo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST; break;
-                    case GL_LINE_STRIP: vkTopo = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; break;
-                    case GL_TRIANGLES: vkTopo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
-                    case GL_TRIANGLE_STRIP: vkTopo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;
-                    case GL_TRIANGLE_FAN: vkTopo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN; break;
-                    case GL_QUADS: vkTopo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
-                    default: vkTopo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-                }
+            switch (topology) {
+                case GL_POINTS: vkTopo = VK_PRIMITIVE_TOPOLOGY_POINT_LIST; break;
+                case GL_LINES: vkTopo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST; break;
+                case GL_LINE_LOOP: vkTopo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST; break;
+                case GL_LINE_STRIP: vkTopo = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; break;
+                case GL_TRIANGLES: vkTopo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
+                case GL_TRIANGLE_STRIP: vkTopo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;
+                case GL_TRIANGLE_FAN: vkTopo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN; break;
+                case GL_QUADS: vkTopo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
+                default: vkTopo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            }
 
             VkPipelineInputAssemblyStateCreateInfo iaState = VkPipelineInputAssemblyStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO)
                 .topology(vkTopo)
-                .primitiveRestartEnable(false);   
+                .primitiveRestartEnable(false);
 
             IntBuffer dynStates = stack.mallocInt(2);
-                dynStates.put(0, VK_DYNAMIC_STATE_VIEWPORT);
-                dynStates.put(1, VK_DYNAMIC_STATE_SCISSOR);
+            dynStates.put(0, VK_DYNAMIC_STATE_VIEWPORT);
+            dynStates.put(1, VK_DYNAMIC_STATE_SCISSOR);
 
             VkViewport.Buffer vps = VkViewport.malloc(1);
             vps.get(0).x(viewportX).y(viewportY).width(viewportW).height(viewportH).minDepth(0f).maxDepth(1f);
@@ -762,7 +813,7 @@ public class GL11 {
                 .viewportCount(1)
                 .scissorCount(1)
                 .pViewports(vps)
-                .pScissors(scissors);   
+                .pScissors(scissors);
 
             VkPipelineRasterizationStateCreateInfo rsState = VkPipelineRasterizationStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO)
@@ -774,7 +825,7 @@ public class GL11 {
             if (cull == 1) rsState.cullMode(VK_CULL_MODE_BACK_BIT);
             else if (cull == 2) rsState.cullMode(VK_CULL_MODE_FRONT_BIT);
             else if (cull == 3) rsState.cullMode(VK_CULL_MODE_FRONT_BIT | VK_CULL_MODE_BACK_BIT);
-            rsState.frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE);   
+            rsState.frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE);
 
             VkPipelineMultisampleStateCreateInfo msState = VkPipelineMultisampleStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO)
@@ -784,7 +835,7 @@ public class GL11 {
             VkPipelineDepthStencilStateCreateInfo dsState = VkPipelineDepthStencilStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO)
                 .depthTestEnable(depthTest == 1)
-                .depthWriteEnable(depthWrite == 1)   
+                .depthWriteEnable(depthWrite == 1)
                 .depthCompareOp(VK_COMPARE_OP_LESS_OR_EQUAL)
                 .depthBoundsTestEnable(false)
                 .stencilTestEnable(false);
@@ -801,10 +852,10 @@ public class GL11 {
                 }
             }
 
-            VkPipelineColorBlendAttachmentState.Buffer attachments = VkPipelineColorBlendAttachmentState.malloc(1);   
+            VkPipelineColorBlendAttachmentState.Buffer attachments = VkPipelineColorBlendAttachmentState.malloc(1);
             attachments.get(0)
                 .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
-                .blendEnable(false)   
+                .blendEnable(false)
                 .srcColorBlendFactor(VK_BLEND_FACTOR_ONE)
                 .dstColorBlendFactor(VK_BLEND_FACTOR_ZERO)
                 .colorBlendOp(VK_BLEND_OP_ADD)
@@ -812,7 +863,7 @@ public class GL11 {
                 .dstAlphaBlendFactor(VK_BLEND_FACTOR_ZERO)
                 .alphaBlendOp(VK_BLEND_OP_ADD);
             if (blend != 0) {
-                attachments.get(0).blendEnable(true);   
+                attachments.get(0).blendEnable(true);
                 int src = (blend >> 8) & 0xFF;
                 int dst = blend & 0xFF;
                 attachments.get(0).srcColorBlendFactor(glBlendFactorToVk(src))
@@ -832,18 +883,18 @@ public class GL11 {
             stages.get(0)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO)
                 .stage(VK_SHADER_STAGE_VERTEX_BIT)
-                .module(vertShader)
+                .module(GL11Util.vertShader)
                 .pName(stack.UTF8("main"));
             stages.get(1)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO)
                 .stage(VK_SHADER_STAGE_FRAGMENT_BIT)
-                .module(fragShader)
+                .module(GL11Util.fragShader)
                 .pName(stack.UTF8("main"));
 
             VkGraphicsPipelineCreateInfo.Buffer gpcis = VkGraphicsPipelineCreateInfo.malloc(1, stack);
             gpcis.get(0)
                 .sType(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO)
-                .pStages(stages)   
+                .pStages(stages)
                 .pVertexInputState(viState)
                 .pInputAssemblyState(iaState)
                 .pTessellationState(null)
@@ -852,10 +903,10 @@ public class GL11 {
                 .pMultisampleState(msState)
                 .pDepthStencilState(dsState)
                 .pColorBlendState(cbState)
-                .layout(pipelineLayout);
+                .layout(GL11Util.pipelineLayout);
 
             LongBuffer pipePtr = stack.mallocLong(1);
-            int result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, gpcis, null, pipePtr);   
+            int result = vkCreateGraphicsPipelines(GL11Util.device, VK_NULL_HANDLE, gpcis, null, pipePtr);
             if (result != VK_SUCCESS) throw new RuntimeException("vkCreateGraphicsPipelines: " + result);
             return pipePtr.get(0);
         }
@@ -895,7 +946,6 @@ public class GL11 {
             int bytesPerChannel = 1;
             long dataSize = (long)w * h * channels * bytesPerChannel;
 
-            // Create image
             VkImageCreateInfo ici = VkImageCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO)
                 .imageType(VK_IMAGE_TYPE_2D)
@@ -906,22 +956,20 @@ public class GL11 {
                 .usage(VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
                 .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
             LongBuffer imgPtr = stack.mallocLong(1);
-            vkCreateImage(device, ici, null, imgPtr);
+            vkCreateImage(GL11Util.device, ici, null, imgPtr);
             long img = imgPtr.get(0);
 
-            // Allocate + bind memory
             VkMemoryRequirements mr = VkMemoryRequirements.calloc(stack);
-            vkGetImageMemoryRequirements(device, img, mr);
+            vkGetImageMemoryRequirements(GL11Util.device, img, mr);
             VkMemoryAllocateInfo mai = VkMemoryAllocateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
                 .allocationSize(mr.size())
                 .memoryTypeIndex(findMemoryType(mr.memoryTypeBits(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
             LongBuffer memPtr = stack.mallocLong(1);
-            vkAllocateMemory(device, mai, null, memPtr);
+            vkAllocateMemory(GL11Util.device, mai, null, memPtr);
             long mem = memPtr.get(0);
-            vkBindImageMemory(device, img, mem, 0);
+            vkBindImageMemory(GL11Util.device, img, mem, 0);
 
-            // Create image view
             VkImageViewCreateInfo ivci = VkImageViewCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO)
                 .image(img)
@@ -937,16 +985,14 @@ public class GL11 {
                     .baseArrayLayer(0)
                     .layerCount(1));
             LongBuffer viewPtr = stack.mallocLong(1);
-            vkCreateImageView(device, ivci, null, viewPtr);
+            vkCreateImageView(GL11Util.device, ivci, null, viewPtr);
             long view = viewPtr.get(0);
 
-            // Upload via staging
             ByteBuffer bb = ByteBuffer.wrap(data);
             bb.position(0);
             bb.limit((int)dataSize);
-            MemoryUtil.memCopy(MemoryUtil.memAddress(bb), stagingPtr, (int)dataSize);   
+            MemoryUtil.memCopy(MemoryUtil.memAddress(bb), GL11Util.stagingPtr, (int)dataSize);
 
-            // Transition to TRANSFER_DST_OPTIMAL
             VkImageMemoryBarrier2.Buffer barriers = VkImageMemoryBarrier2.malloc(1);
             barriers.get(0)
                 .sType(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2)
@@ -967,17 +1013,16 @@ public class GL11 {
 
             VkDependencyInfo depInfo = VkDependencyInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_DEPENDENCY_INFO)
-                .pImageMemoryBarriers(barriers);   
+                .pImageMemoryBarriers(barriers);
 
-            // One-time command buffer for the upload
             VkCommandBufferAllocateInfo cai = VkCommandBufferAllocateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO)
-                .commandPool(commandPool)
+                .commandPool(GL11Util.commandPool)
                 .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
                 .commandBufferCount(1);
             PointerBuffer cmdBuf = stack.mallocPointer(1);
-            vkAllocateCommandBuffers(device, cai, cmdBuf);
-            VkCommandBuffer cmd = new VkCommandBuffer(cmdBuf.get(0), device);
+            vkAllocateCommandBuffers(GL11Util.device, cai, cmdBuf);
+            VkCommandBuffer cmd = new VkCommandBuffer(cmdBuf.get(0), GL11Util.device);
 
             VkCommandBufferBeginInfo cbi = VkCommandBufferBeginInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO)
@@ -985,7 +1030,6 @@ public class GL11 {
             vkBeginCommandBuffer(cmd, cbi);
             vkCmdPipelineBarrier2(cmd, depInfo);
 
-            // Copy region
             VkBufferImageCopy.Buffer regions = VkBufferImageCopy.malloc(1);
             regions.get(0)
                 .bufferOffset(0)
@@ -997,37 +1041,32 @@ public class GL11 {
                     .layerCount(1))
                 .imageExtent(e -> e.width(w).height(h).depth(1));
 
-            vkCmdCopyBufferToImage(cmd, stagingBuffer, img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regions);   
+            vkCmdCopyBufferToImage(cmd, GL11Util.stagingBuffer, img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regions);
 
-            // Transition to SHADER_READ_ONLY
             PointerBuffer cmdBufs = stack.mallocPointer(1).put(0, cmd.address());
             VkSubmitInfo si = VkSubmitInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_SUBMIT_INFO)
                 .pCommandBuffers(cmdBufs);
-            vkQueueSubmit(graphicsQueue, si, inFlightFences[currentFrame]);
-            vkWaitForFences(device, inFlightFences[currentFrame], true, Long.MAX_VALUE);   
-            vkResetFences(device, inFlightFences[currentFrame]);   
+            vkQueueSubmit(GL11Util.graphicsQueue, si, GL11Util.inFlightFences[GL11Util.currentFrame]);
+            vkWaitForFences(GL11Util.device, GL11Util.inFlightFences[GL11Util.currentFrame], true, Long.MAX_VALUE);
+            vkResetFences(GL11Util.device, GL11Util.inFlightFences[GL11Util.currentFrame]);
             PointerBuffer rawCmd = stack.mallocPointer(1).put(0, cmd.address());
-            vkFreeCommandBuffers(device, commandPool, rawCmd);   
+            vkFreeCommandBuffers(GL11Util.device, GL11Util.commandPool, rawCmd);
 
-            // Create descriptor set
             VkDescriptorSetAllocateInfo dsa = VkDescriptorSetAllocateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO)
-                .descriptorPool(descriptorPool)
-                .pSetLayouts(stack.mallocLong(1).put(0, descriptorSetLayout));
+                .descriptorPool(GL11Util.descriptorPool)
+                .pSetLayouts(stack.mallocLong(1).put(0, GL11Util.descriptorSetLayout));
             LongBuffer dsetPtr = stack.mallocLong(1);
-            vkAllocateDescriptorSets(device, dsa, dsetPtr);
+            vkAllocateDescriptorSets(GL11Util.device, dsa, dsetPtr);
             long dset = dsetPtr.get(0);
 
-            // VkBufferImageInfo: buffer=0, offset=8, range=16
             VkDescriptorBufferInfo.Buffer bufInfos = VkDescriptorBufferInfo.malloc(1);
-            bufInfos.get(0).buffer(uniformBuffer).offset(0).range(256);
+            bufInfos.get(0).buffer(GL11Util.uniformBuffer).offset(0).range(256);
 
-            // VkImageSamplerInfo: sampler=0, imageView=8, imageLayout=16
             VkDescriptorImageInfo.Buffer imgInfos = VkDescriptorImageInfo.malloc(1);
-            imgInfos.get(0).sampler(sampler).imageView(view).imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            imgInfos.get(0).sampler(GL11Util.sampler).imageView(view).imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-            // VkWriteDescriptorSet
             VkWriteDescriptorSet.Buffer writes = VkWriteDescriptorSet.malloc(2);
             writes.get(0)
                 .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
@@ -1045,41 +1084,38 @@ public class GL11 {
                 .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
                 .descriptorCount(1)
                 .pImageInfo(imgInfos);
-            vkUpdateDescriptorSets(device, writes, null);   
+            vkUpdateDescriptorSets(GL11Util.device, writes, null);
 
-            // Store
-            textureImages.put(texId, img);
-            textureImageViews.put(texId, view);
-            textureMemory.put(texId, mem);
-            descriptorSets.put(texId, dset);   
+            GL11Util.textureImages.put(texId, img);
+            GL11Util.textureImageViews.put(texId, view);
+            GL11Util.textureMemory.put(texId, mem);
+            GL11Util.descriptorSets.put(texId, dset);
         }
-    }
+    }   
 
     // ═══════════════════════════════════════════
     //  FRAME LOOP
     // ═══════════════════════════════════════════
 
     public static void beginFrame() throws Exception {
-        if (!initialized) return;
+        if (!GL11Util.initialized) return;
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            vkWaitForFences(device, inFlightFences[currentFrame], true, Long.MAX_VALUE);
-            vkResetFences(device, inFlightFences[currentFrame]);   
+            vkWaitForFences(GL11Util.device, GL11Util.inFlightFences[GL11Util.currentFrame], true, Long.MAX_VALUE);
+            vkResetFences(GL11Util.device, GL11Util.inFlightFences[GL11Util.currentFrame]);
 
             IntBuffer imgIdx = stack.mallocInt(1);
-            vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE,
-                imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, imgIdx);
-            currentImageIndex = imgIdx.get(0);
+            vkAcquireNextImageKHR(GL11Util.device, GL11Util.swapchain, Long.MAX_VALUE,
+                GL11Util.imageAvailableSemaphores[GL11Util.currentFrame], VK_NULL_HANDLE, imgIdx);
+            GL11Util.currentImageIndex = imgIdx.get(0);
 
-            VkCommandBuffer cmd = commandBuffers[currentFrame];
+            VkCommandBuffer cmd = GL11Util.commandBuffers[GL11Util.currentFrame];
             VkCommandBufferBeginInfo cbi = VkCommandBufferBeginInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO)
                 .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
             vkBeginCommandBuffer(cmd, cbi);
 
-            // Update uniform buffer (MVP matrices)
             updateUniformBuffer();
 
-            // Begin dynamic rendering
             VkClearColorValue ccv = VkClearColorValue.calloc(stack);
             ccv.float32(0, clearColorR);
             ccv.float32(1, clearColorG);
@@ -1092,26 +1128,26 @@ public class GL11 {
             dsv.depth(1.0f);
             dsv.stencil(0);
 
-            VkClearValue depthClear = VkClearValue.calloc(stack).depthStencil(dsv);   
+            VkClearValue depthClear = VkClearValue.calloc(stack).depthStencil(dsv);
 
             VkRenderingAttachmentInfo depthAtt = VkRenderingAttachmentInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO)
-                .imageView(depthView)
+                .imageView(GL11Util.depthView)
                 .imageLayout(VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL)
                 .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
                 .storeOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
-                .clearValue(depthClear);   
+                .clearValue(depthClear);
 
             VkRect2D renderArea = VkRect2D.calloc(stack);
-                VkOffset2D off = VkOffset2D.calloc(stack).x(0).y(0);
-                renderArea.offset(off);
-                VkExtent2D ext = VkExtent2D.calloc(stack).width(width).height(height);
-                renderArea.extent(ext);   
+            VkOffset2D off = VkOffset2D.calloc(stack).x(0).y(0);
+            renderArea.offset(off);
+            VkExtent2D ext = VkExtent2D.calloc(stack).width(GL11Util.width).height(GL11Util.height);
+            renderArea.extent(ext);
 
             VkRenderingAttachmentInfo.Buffer colorAtts = VkRenderingAttachmentInfo.malloc(1);
             colorAtts.get(0)
                 .sType(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO)
-                .imageView(swapchainImageViews[currentImageIndex])
+                .imageView(GL11Util.swapchainImageViews[GL11Util.currentImageIndex])
                 .imageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
                 .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
                 .storeOp(VK_ATTACHMENT_STORE_OP_STORE)
@@ -1122,38 +1158,36 @@ public class GL11 {
                 .renderArea(renderArea)
                 .layerCount(1)
                 .pColorAttachments(colorAtts)
-                .pDepthAttachment(depthAtt);   
+                .pDepthAttachment(depthAtt);
 
             vkCmdBeginRendering(cmd, ri);
 
-            // Set viewport and scissor (dynamic state)
             VkViewport.Buffer vps = VkViewport.malloc(1, stack);
             vps.get(0).x(viewportX).y(viewportY).width(viewportW).height(viewportH).minDepth(0f).maxDepth(1f);
-            vkCmdSetViewport(cmd, 0, vps);   
+            vkCmdSetViewport(cmd, 0, vps);
 
             VkRect2D.Buffer scissors = VkRect2D.malloc(1, stack);
             VkOffset2D scOff = VkOffset2D.calloc(stack).x(scissorX).y(scissorY);
             scissors.get(0).offset(scOff);
             VkExtent2D scExt = VkExtent2D.calloc(stack).width(scissorW).height(scissorH);
-            scissors.get(0).extent(scExt);   
-            vkCmdSetScissor(cmd, 0, scissors);   
+            scissors.get(0).extent(scExt);
+            vkCmdSetScissor(cmd, 0, scissors);
 
-            // Upload vertex data
             if (vertexCount > 0) {
                 long dataSize = vertexCount * FLOATS_PER_VERTEX * 4L;
-                MemoryUtil.memCopy(MemoryUtil.memAddress(vertexData), stagingPtr, (int)dataSize);   
+                MemoryUtil.memCopy(MemoryUtil.memAddress(vertexData), GL11Util.stagingPtr, (int)dataSize);
 
                 VkBufferCopy.Buffer copies = VkBufferCopy.malloc(1, stack);
                 copies.get(0).srcOffset(0).dstOffset(0).size(dataSize);
-                vkCmdCopyBuffer(cmd, stagingBuffer, vertexBuffer, copies);   
+                vkCmdCopyBuffer(cmd, GL11Util.stagingBuffer, GL11Util.vertexBuffer, copies);
             }
         }
     }
 
     public static void endFrame() throws Exception {
-        if (!initialized) return;
+        if (!GL11Util.initialized) return;
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            VkCommandBuffer cmd = commandBuffers[currentFrame];
+            VkCommandBuffer cmd = GL11Util.commandBuffers[GL11Util.currentFrame];
 
             vkCmdEndRendering(cmd);
             vkEndCommandBuffer(cmd);
@@ -1162,39 +1196,36 @@ public class GL11 {
 
             VkSubmitInfo si = VkSubmitInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_SUBMIT_INFO)
-                .pWaitSemaphores(stack.mallocLong(1).put(0, imageAvailableSemaphores[currentFrame]))
-                .pWaitDstStageMask(stack.mallocInt(1).put(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT))   
+                .pWaitSemaphores(stack.mallocLong(1).put(0, GL11Util.imageAvailableSemaphores[GL11Util.currentFrame]))
+                .pWaitDstStageMask(stack.mallocInt(1).put(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT))
                 .pCommandBuffers(cmdBufs)
-                .pSignalSemaphores(stack.mallocLong(1).put(0, renderFinishedSemaphores[currentFrame]));
+                .pSignalSemaphores(stack.mallocLong(1).put(0, GL11Util.renderFinishedSemaphores[GL11Util.currentFrame]));
 
-            vkQueueSubmit(graphicsQueue, si, inFlightFences[currentFrame]);
+            vkQueueSubmit(GL11Util.graphicsQueue, si, GL11Util.inFlightFences[GL11Util.currentFrame]);
 
             VkPresentInfoKHR pi = VkPresentInfoKHR.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PRESENT_INFO_KHR)
-                .pWaitSemaphores(stack.mallocLong(1).put(0, renderFinishedSemaphores[currentFrame]))
-                .pSwapchains(stack.mallocLong(1).put(0, swapchain))
-                .pImageIndices(stack.mallocInt(1).put(0, currentImageIndex));
+                .pWaitSemaphores(stack.mallocLong(1).put(0, GL11Util.renderFinishedSemaphores[GL11Util.currentFrame]))
+                .pSwapchains(stack.mallocLong(1).put(0, GL11Util.swapchain))
+                .pImageIndices(stack.mallocInt(1).put(0, GL11Util.currentImageIndex));
 
-            vkQueuePresentKHR(graphicsQueue, pi);
+            vkQueuePresentKHR(GL11Util.graphicsQueue, pi);
 
-            currentFrame = (currentFrame + 1) % IN_FLIGHT_FRAMES;
+            GL11Util.currentFrame = (GL11Util.currentFrame + 1) % IN_FLIGHT_FRAMES;
         }
-    }   
+    }
 
     private static void updateUniformBuffer() {
-        // Write modelview, projection, texture matrices to the mapped uniform buffer
-        // Layout: 3 mat4s = 48 floats = 192 bytes (padded to 256)
         float[] mv = modelviewStack[modelviewSp];
         float[] pr = projectionStack[projectionSp];
         float[] tx = textureStack[textureSp];
 
-        // GL matrices are column-major 4x4, 16 floats each
         for (int i = 0; i < 16; i++) {
-            MemoryUtil.memPutFloat(uniformPtr + i * 4L, mv[i]);
-            MemoryUtil.memPutFloat(uniformPtr + (16 + i) * 4L, pr[i]);
-            MemoryUtil.memPutFloat(uniformPtr + (32 + i) * 4L, tx[i]);
-        }   
-    }
+            MemoryUtil.memPutFloat(GL11Util.uniformPtr + i * 4L, mv[i]);
+            MemoryUtil.memPutFloat(GL11Util.uniformPtr + (16 + i) * 4L, pr[i]);
+            MemoryUtil.memPutFloat(GL11Util.uniformPtr + (32 + i) * 4L, tx[i]);
+        }
+    }   
 
     // ═══════════════════════════════════════════
     //  GL11 METHOD IMPLEMENTATIONS
@@ -1304,14 +1335,14 @@ public class GL11 {
     public static void glFrustum(double left, double right, double bottom, double top, double zNear, double zFar) {
         float[] m = {
             (float)(2.0 * zNear / (right - left)), 0, (float)((right + left) / (right - left)), 0,
-            0, (float)(2.0 * zNear / (top - bottom)), (float)((top + bottom) / (top - bottom)), 0,
+            0, (float)(2.0 * zNear / (top - bottom)), 0, (float)((top + bottom) / (top - bottom)), 0,
             0, 0, (float)(-(zFar + zNear) / (zFar - zNear)), (float)(-2.0 * zFar * zNear / (zFar - zNear)),
             0, 0, -1, 0
         };
         float[] cur = currentMatrix();
         float[] result = new float[16];
-                    multiplyMatrices(cur, m, result);
-            System.arraycopy(result, 0, cur, 0, 16);
+        multiplyMatrices(cur, m, result);
+        System.arraycopy(result, 0, cur, 0, 16);
     }
 
     public static void glPerspective(double fovy, double aspect, double zNear, double zFar) {
@@ -1466,20 +1497,20 @@ public class GL11 {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             for (int i = 0; i < n; i++) {
                 int id = ids.get(i);
-                Long img = textureImages.remove(id);
-                Long view = textureImageViews.remove(id);
-                Long mem = textureMemory.remove(id);
-                Long dset = descriptorSets.remove(id);
-                if (img != null && img != 0) vkDestroyImage(device, img, null);
-                if (view != null && view != 0) vkDestroyImageView(device, view, null);
-                if (mem != null && mem != 0) vkFreeMemory(device, mem, null);
+                Long img = GL11Util.textureImages.remove(id);
+                Long view = GL11Util.textureImageViews.remove(id);
+                Long mem = GL11Util.textureMemory.remove(id);
+                Long dset = GL11Util.descriptorSets.remove(id);
+                if (img != null && img != 0) vkDestroyImage(GL11Util.device, img, null);
+                if (view != null && view != 0) vkDestroyImageView(GL11Util.device, view, null);
+                if (mem != null && mem != 0) vkFreeMemory(GL11Util.device, mem, null);
                 if (dset != null && dset != 0) {
                     LongBuffer sets = stack.mallocLong(1).put(0, dset);
-                    vkFreeDescriptorSets(device, descriptorPool, sets);   
+                    vkFreeDescriptorSets(GL11Util.device, GL11Util.descriptorPool, sets);
                 }
             }
         }
-    }   
+    }
 
     public static void glTexImage2D(int target, int level, int internalFormat, int w, int h,
                                      int border, int format, int type, java.nio.ByteBuffer data) {
@@ -1506,7 +1537,6 @@ public class GL11 {
 
     public static void glEnd() {
         inBegin = false;
-        // The actual draw is recorded in beginFrame when vertexCount > 0
     }
 
     public static void glVertex3f(float x, float y, float z) {
@@ -1572,7 +1602,7 @@ public class GL11 {
         curNx = x; curNy = y; curNz = z;
     }
 
-    // --- Client State (no-op, we track everything implicitly) ---
+    // --- Client State (no-op) ---
 
     public static void glClientActiveTexture(int which) { }
     public static void glActiveTexture(int which) { }
@@ -1584,38 +1614,25 @@ public class GL11 {
     public static void glEnableClientState(int cap) { }
     public static void glDisableClientState(int cap) { }
 
-    // --- Draw (for non-immediate-mode paths, e.g. VBOs in later MC versions) ---
+    // --- Draw ---
 
-    public static void glDrawArrays(int mode, int first, int count) {
-        // For immediate mode this is a no-op; for VBO paths you'd record a draw
-        // into the current command buffer here.
-    }
-
-    public static void glDrawElements(int mode, int count, int type, IntBuffer indices) {
-        // Same as above
-    }
+    public static void glDrawArrays(int mode, int first, int count) { }
+    public static void glDrawElements(int mode, int count, int type, IntBuffer indices) { }
 
     // --- Misc ---
 
     public static void glFinish() {
-        if (initialized) vkDeviceWaitIdle(device);
+        if (GL11Util.initialized) vkDeviceWaitIdle(GL11Util.device);
     }
 
     public static void glFlush() { }
-
     public static void glHint(int target, int mode) { }
-
     public static void glPixelStorei(int pname, int param) { }
-
     public static void glShadeModel(int mode) { }
-
     public static void glLineWidth(float width) { }
-
     public static void glPointSize(float size) { }
-
     public static void glFrontFace(int mode) { }
-
-    public static void glLogicOp(int opcode) { }
+    public static void glLogicOp(int opcode) { }   
 
     // ═══════════════════════════════════════════
     //  UTILITIES
@@ -1634,7 +1651,6 @@ public class GL11 {
         m[0] = m[5] = m[10] = m[15] = 1f;
     }
 
-    // Column-major multiply: result = a * b
     private static void multiplyMatrices(float[] a, float[] b, float[] result) {
         for (int col = 0; col < 4; col++) {
             for (int row = 0; row < 4; row++) {
@@ -1656,7 +1672,7 @@ public class GL11 {
     private static int findMemoryType(int typeBits, int props) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkPhysicalDeviceMemoryProperties memProps = VkPhysicalDeviceMemoryProperties.calloc(stack);
-            vkGetPhysicalDeviceMemoryProperties(physicalDevice, memProps);
+            vkGetPhysicalDeviceMemoryProperties(GL11Util.physicalDevice, memProps);
             for (int i = 0; i < memProps.memoryTypeCount(); i++) {
                 if ((typeBits & (1 << i)) != 0 &&
                     (memProps.memoryTypes().get(i).propertyFlags() & props) == props) {
@@ -1665,7 +1681,7 @@ public class GL11 {
             }
         }
         throw new RuntimeException("No suitable memory type found");
-    }   
+    }
 
     private static byte[] loadSpirV(String name) throws Exception {
         java.io.InputStream is = GL11.class.getResourceAsStream("/shaders/" + name);
@@ -1680,6 +1696,6 @@ public class GL11 {
     }
 
     public static boolean isInitialized() {
-        return initialized;
-    }   
+        return GL11Util.initialized;
+    }
 }   

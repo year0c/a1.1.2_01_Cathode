@@ -177,37 +177,6 @@ public class LightmapImage {
             vkMapMemory(device, stagingMemory, 0, size, 0, ptr);
             this.stagingPtr = ptr.get(0);
         }   
-    }   
-
-    private int findMemoryType(int typeBits, int requiredProps) {
-        VkPhysicalDeviceMemoryProperties memProps = VkPhysicalDeviceMemoryProperties.calloc();
-        vkGetPhysicalDeviceMemoryProperties(physicalDevice, memProps);
-
-        int result = -1;
-        for (int i = 0; i < memProps.memoryTypeCount(); i++) {
-            if ((typeBits & (1 << i)) != 0) {
-                VkMemoryType mt = memProps.memoryTypes(i);
-                if ((mt.propertyFlags() & requiredProps) == requiredProps) {
-                    result = i;
-                    break;
-                }
-            }
-        }
-        if (result == -1) {
-            for (int i = 0; i < memProps.memoryTypeCount(); i++) {
-                if ((typeBits & (1 << i)) != 0) {
-                    result = i;
-                    break;
-                }
-            }
-        }
-        memProps.free();
-
-        if (result == -1) {
-            throw new RuntimeException("No suitable memory type for bits=0x"
-                + Integer.toHexString(typeBits));
-        }
-        return result;
     }
 
     /**

@@ -25,6 +25,11 @@ public class SkyPipeline {
     private long uniformMemory;
     private long uniformPtr;
 
+    // 18 floats = 72 bytes
+    // vec3 zenithColor, vec3 horizonColor, vec3 sunDir, float starAlpha,
+    // vec3 camPos, float fov, float aspect, float yaw, float pitch
+    private static final int UNIFORM_SIZE = 72;
+
     public SkyPipeline(VkDevice device, VkPhysicalDevice physicalDevice, long renderPass) {
         this.device = device;
         this.physicalDevice = physicalDevice;
@@ -200,8 +205,6 @@ public class SkyPipeline {
         sizes.free();
     }
 
-    private static final int UNIFORM_SIZE = 16 * 4;
-
     private void createUniformBuffer() {
         VkBufferCreateInfo bufInfo = VkBufferCreateInfo.calloc()
             .sType(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO)
@@ -274,12 +277,25 @@ public class SkyPipeline {
         descBufInfo.free();
     }
 
+    /**
+     * Update the 72-byte sky uniform buffer.
+     * Layout:
+     *   0  vec3 zenithColor
+     *  12 vec3 horizonColor
+     *  24 vec3 sunDir
+     *  36 float starAlpha
+     *  40 vec3 camPos
+     *  52 float fov (radians)
+     *  56 float aspect
+     *  60 float yaw (radians)
+     *  64 float pitch (radians)
+     */
     public void updateUniforms(float[] zenith, float[] horizon, float[] sunDir,
                                float starAlpha, float camX, float camY, float camZ,
-                               float fov, float aspect) {
-        memPutFloat(uniformPtr + 0, zenith[0]);
-        memPutFloat(uniformPtr + 4, zenith[1]);
-        memPutFloat(uniformPtr + 8, zenith[2]);
+                               float fov, float aspect, float yaw, float pitch) {
+        memPutFloat(uniformPtr + 0,  zenith[0]);
+        memPutFloat(uniformPtr + 4,  zenith[1]);
+        memPutFloat(uniformPtr + 8,  zenith[2]);
         memPutFloat(uniformPtr + 12, horizon[0]);
         memPutFloat(uniformPtr + 16, horizon[1]);
         memPutFloat(uniformPtr + 20, horizon[2]);
@@ -292,6 +308,8 @@ public class SkyPipeline {
         memPutFloat(uniformPtr + 48, camZ);
         memPutFloat(uniformPtr + 52, fov);
         memPutFloat(uniformPtr + 56, aspect);
+        memPutFloat(uniformPtr + 60, yaw);
+        memPutFloat(uniformPtr + 64, pitch);
     }
 
     public long getPipeline()       { return pipeline; }

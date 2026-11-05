@@ -5,7 +5,7 @@
   "compatibilityLevel": "JAVA_25",
   "mixins": [
     "MinecraftMixin",
-    "TesselatorMixin",
+    "WorldMixin",
     "bugfixin/WorldLightUpdateMixin",
     "bugfixin/DistanceChunkSorterMixin",
     "bugfixin/DirtyChunkSorterMixin"
