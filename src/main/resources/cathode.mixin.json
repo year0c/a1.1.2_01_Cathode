@@ -7,7 +7,9 @@
     "GlSurfaceMixin",
     "DisplaySdlMixin",
     "GL11Mixin",
-    "GL11CMixin"
+    "MemoryTrackerMixin",
+    "TMLoadMixin",
+    "TMReleaseMixin"
   ],
   "mixins": [],
   "injectors": {

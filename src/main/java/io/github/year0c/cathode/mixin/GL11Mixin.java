@@ -1,6 +1,6 @@
 package io.github.year0c.cathode.mixin;
 
-import org.lwjgl.opengl.GL11Shadow;
+import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.util.GL11.GL11State;
 import org.lwjgl.opengl.util.GL11.GL11Vars;
 import org.lwjgl.opengl.func.GL11.GL11GLFunc;
@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.Overwrite;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 
-@Mixin(GL11Shadow.class)
+@Mixin(GL11.class)
 public class GL11Mixin {
 
     // --- Frame boundary ---

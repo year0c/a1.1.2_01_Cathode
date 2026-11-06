@@ -46,17 +46,17 @@ dependencies {
 
 	ploceus.dependOsl(project.osl_version)
 
-	modImplementation "org.lwjgl:lwjgl:3.4.1"
-	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1"
-	modImplementation "org.lwjgl:lwjgl-vulkan:3.4.1"
+	modImplementation "org.lwjgl:lwjgl:3.4.3"
+	modImplementation "org.lwjgl:lwjgl-sdl:3.4.3"
+	modImplementation "org.lwjgl:lwjgl-vulkan:3.4.3"
 
-	modImplementation "org.lwjgl:lwjgl:3.4.1:natives-linux"
-	modImplementation "org.lwjgl:lwjgl:3.4.1:natives-windows"
-	modImplementation "org.lwjgl:lwjgl:3.4.1:natives-macos"
-	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1:natives-linux"
-	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1:natives-windows"
-	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1:natives-macos"
-	modImplementation "org.lwjgl:lwjgl-vulkan:3.4.1:natives-macos"
+	modImplementation "org.lwjgl:lwjgl:3.4.3:natives-linux"
+	modImplementation "org.lwjgl:lwjgl:3.4.3:natives-windows"
+	modImplementation "org.lwjgl:lwjgl:3.4.3:natives-macos"
+	modImplementation "org.lwjgl:lwjgl-sdl:3.4.3:natives-linux"
+	modImplementation "org.lwjgl:lwjgl-sdl:3.4.3:natives-windows"
+	modImplementation "org.lwjgl:lwjgl-sdl:3.4.3:natives-macos"
+	modImplementation "org.lwjgl:lwjgl-vulkan:3.4.3:natives-macos"
 
 	modImplementation "org.jspecify:jspecify:+"
 	modImplementation "org.ow2.asm:asm-commons:+"
@@ -77,8 +77,8 @@ configurations.configureEach {
             if (requested instanceof org.gradle.api.artifacts.component.ModuleComponentSelector
                     && requested.group == "org.lwjgl") {
                 substitution.useTarget(
-                    "${requested.group}:${requested.module}:3.4.1",
-                    "Use LWJGL 3.4.1 in the development environment"
+                    "${requested.group}:${requested.module}:3.4.3",
+                    "Use LWJGL 3.4.3 in the development environment"
                 )
             }
         }
