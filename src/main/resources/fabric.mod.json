@@ -9,8 +9,11 @@
   "entrypoints": {
     "main": []
   },
+  "mixins": [
+    "cathode.mixin.json"
+  ],
   "depends": {
     "minecraft": "1.0.0-alpha.1.2.1",
     "java": "25"
-  }   
+  }
 }   
