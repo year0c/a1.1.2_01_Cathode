@@ -9,6 +9,14 @@
   "entrypoints": {
     "main": []
   },
+  "custom": {
+    "fabric-loom": {
+      "preLaunch": "io.github.moehreag.legacylwjgl3.PreLaunch"
+    }
+  },
+  "mixins": [
+    "cathode.mixin.json"
+  ],
   "depends": {
     "minecraft": "1.0.0-alpha.1.2.1",
     "java": "25"

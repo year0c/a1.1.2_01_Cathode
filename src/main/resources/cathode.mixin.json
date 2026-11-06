@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "io.github.year0c.cathode.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [],
+  "mixins": [
+    "DisplayMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}   

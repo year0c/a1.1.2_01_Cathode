@@ -1,57 +1,73 @@
 plugins {
-	id 'fabric-loom' version '1.15.5'
-	id 'ploceus' version '1.15.9'
-	id 'maven-publish'
+    id 'fabric-loom' version '1.15.5'
+    id 'ploceus' version '1.15.9'
+    id 'maven-publish'
 }
 
+tasks.named('runClient') {
+    dependsOn 'DeAwtPatch'
+}
+
+tasks.register('DeAwtPatch', Jar) {
+    archiveBaseName.set('DeAwtPatch')
+    dependsOn 'compileJava'
+    from('build/classes/java/main') {
+        include 'uk/betacraft/legacyfix/patch/impl/lwjgl/DeAwtPatch*.class'
+    }
+    manifest {
+        attributes(
+            'Premain-Class': 'uk.betacraft.legacyfix.patch.impl.lwjgl.DeAwtPatch',
+            'Agent-Class': 'uk.betacraft.legacyfix.patch.impl.lwjgl.DeAwtPatch',
+            'Can-Redefine-Classes': 'true',
+            'Can-Retransform-Classes': 'true'
+        )
+    }
+}   
+
 loom {
-	clientOnlyMinecraftJar()
+    clientOnlyMinecraftJar()
+
+    runs {
+        client {
+            defaultMainClass("net.minecraft.client.Minecraft")
+            vmArgs(
+                "-javaagent:$buildDir/libs/DeAwtPatch.jar",
+                "-DeAwtPatch"
+            )
+        }
+    }
 }
 
 ploceus {
-	setIntermediaryGeneration(2)
+    setIntermediaryGeneration(2)
 }
 
 dependencies {
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
-	exceptions ploceus.raven(project.raven_build)
-	signatures ploceus.sparrow(project.sparrow_build)
-	nests ploceus.nests(project.nests_build)
-	mappings ploceus.featherMappings(project.feather_build)
+    exceptions ploceus.raven(project.raven_build)
+    signatures ploceus.sparrow(project.sparrow_build)
+    nests ploceus.nests(project.nests_build)
+    mappings ploceus.featherMappings(project.feather_build)
 
-	ploceus.dependOsl(project.osl_version)
+    ploceus.dependOsl(project.osl_version)
 
-	modImplementation "org.lwjgl:lwjgl:3.4.1"
-	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1"
-	modImplementation "org.lwjgl:lwjgl-vulkan:3.4.1"
+    modImplementation "org.lwjgl:lwjgl:3.4.1"
+    modImplementation "org.lwjgl:lwjgl-sdl:3.4.1"
+    modImplementation "org.lwjgl:lwjgl-vulkan:3.4.1"
+    modImplementation "org.lwjgl:lwjgl-opengl:3.4.1"
 
-	modImplementation "org.lwjgl:lwjgl:3.4.1:natives-linux"
-	modImplementation "org.lwjgl:lwjgl:3.4.1:natives-windows"
-	modImplementation "org.lwjgl:lwjgl:3.4.1:natives-macos"
-	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1:natives-linux"
-	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1:natives-windows"
-	modImplementation "org.lwjgl:lwjgl-sdl:3.4.1:natives-macos"
-	modImplementation "org.lwjgl:lwjgl-vulkan:3.4.1:natives-macos"
+    modImplementation "org.lwjgl:lwjgl:3.4.1:natives-linux"
+    modImplementation "org.lwjgl:lwjgl:3.4.1:natives-windows"
+    modImplementation "org.lwjgl:lwjgl:3.4.1:natives-macos"
+    modImplementation "org.lwjgl:lwjgl-sdl:3.4.1:natives-linux"
+    modImplementation "org.lwjgl:lwjgl-sdl:3.4.1:natives-windows"
+    modImplementation "org.lwjgl:lwjgl-sdl:3.4.1:natives-macos"
+    modImplementation "org.lwjgl:lwjgl-vulkan:3.4.1:natives-macos"
 
-	modImplementation "org.jspecify:jspecify:+"
-	modImplementation "org.ow2.asm:asm-commons:+"
-}
-
-configurations.configureEach {
-    resolutionStrategy.dependencySubstitution {
-        all { substitution ->
-            def requested = substitution.requested
-            if (requested instanceof org.gradle.api.artifacts.component.ModuleComponentSelector
-                    && requested.group == "org.lwjgl") {
-                substitution.useTarget(
-                    "${requested.group}:${requested.module}:3.4.1",
-                    "Use LWJGL 3.4.1 in the development environment"
-                )
-            }
-        }
-    }
+    modImplementation "org.jetbrains:annotations:+"
+    modImplementation "org.ow2.asm:asm-commons:+"
 }
 
 jar {
