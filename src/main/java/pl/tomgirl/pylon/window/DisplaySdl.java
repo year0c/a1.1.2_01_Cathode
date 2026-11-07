@@ -20,7 +20,7 @@ import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.sdl.SDLEvents.*;
 import static org.lwjgl.sdl.SDLInit.*;
 import static org.lwjgl.sdl.SDLPixels.*;
-import static org.lwjgl.sdl.SDLSurface.*;   
+import static org.lwjgl.sdl.SDLSurface.*;
 
 public class DisplaySdl {
 
@@ -30,6 +30,7 @@ public class DisplaySdl {
     private SDL_Event event;
 
     private long handle = -1L;
+    private long context = -1L;
     private String title = "Minecraft";
     private ByteBuffer[] cachedIcons;
 
@@ -76,7 +77,7 @@ public class DisplaySdl {
         }
     }
 
-    private static final Constructor<@org.jetbrains.annotations.NotNull DisplayMode> DISPLAY_MODE_CTOR;   
+    private static final Constructor<@org.jetbrains.annotations.NotNull DisplayMode> DISPLAY_MODE_CTOR;
 
     static {
         try {
@@ -114,7 +115,7 @@ public class DisplaySdl {
 
     public DisplayMode getDisplayMode() {
         return createDisplayMode(framebufferWidth, framebufferHeight, 24, 60);
-    }   
+    }
 
     public void setFullscreen(boolean fullscreen) {
         if (!isCreated()) {
@@ -188,7 +189,6 @@ public class DisplaySdl {
     public void update() {
         swapBuffers();
         processMessages();
-        System.err.println("(SDL) active");
     }
 
     public void processMessages() {
@@ -258,14 +258,14 @@ public class DisplaySdl {
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-        long flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;   
+        long flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
         handle = SDL_CreateWindow(title, width, height, flags);
         if (handle == 0) {
             System.err.println("(SDL) Failed to create: " + SDL_GetError());
             throw new LWJGLException("SDL_CreateWindow failed: " + SDL_GetError());
         }
 
-        long context = SDL_GL_CreateContext(handle);
+        context = SDL_GL_CreateContext(handle);
         if (context == 0) {
             System.err.println("(SDL) Failed to create: " + SDL_GetError());
             SDL_DestroyWindow(handle);
@@ -295,9 +295,18 @@ public class DisplaySdl {
         SDL_PumpEvents();
         focused = (SDL_GetWindowFlags(handle) & SDL_WINDOW_INPUT_FOCUS) != 0;
 
-        System.err.println("(SDL) Created.");
+        try {
+            GL.createCapabilities();
+        } catch (Exception e) {
+            System.err.println("(SDL) Failed to create: GL context error: " + e.getMessage());
+            SDL_GL_DestroyContext(context);
+            SDL_DestroyWindow(handle);
+            handle = -1;
+            context = -1;
+            throw new LWJGLException("GL.createCapabilities failed: " + e.getMessage());
+        }
 
-        GL.createCapabilities();
+        System.err.println("(SDL) Created.");
 
         if (cachedIcons != null) {
             setIcon(cachedIcons);
@@ -319,10 +328,11 @@ public class DisplaySdl {
 
     public void destroy() {
         if (handle > 0) {
-            SDL_GL_DestroyContext(handle);
+            SDL_GL_DestroyContext(context);
             SDL_DestroyWindow(handle);
         }
         handle = -1;
+        context = -1;
         if (SDL_WasInit(SDL_INIT_VIDEO) != 0) {
             SDL_QuitSubSystem(SDL_INIT_VIDEO);
         }
@@ -375,7 +385,7 @@ public class DisplaySdl {
     }
 
     public void makeCurrent() {
-        SDL_GL_MakeCurrent(handle, SDL_GL_GetCurrentContext());
+        SDL_GL_MakeCurrent(handle, context);
     }
 
     public void swapBuffers() {

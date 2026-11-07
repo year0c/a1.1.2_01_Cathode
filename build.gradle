@@ -13,6 +13,7 @@ tasks.register('DeAwtPatch', Jar) {
     dependsOn 'compileJava'
     from('build/classes/java/main') {
         include 'uk/betacraft/legacyfix/patch/impl/lwjgl/DeAwtPatch*.class'
+        include 'org/lwjglx/PointerBuffer*.class'
     }
     manifest {
         attributes(
@@ -22,7 +23,7 @@ tasks.register('DeAwtPatch', Jar) {
             'Can-Retransform-Classes': 'true'
         )
     }
-}   
+}        
 
 loom {
     clientOnlyMinecraftJar()

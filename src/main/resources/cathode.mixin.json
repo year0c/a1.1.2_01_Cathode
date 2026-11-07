@@ -4,10 +4,10 @@
   "package": "io.github.year0c.cathode.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "MinecraftMixin",
-    "DisplayMixin"
+    "DisplayMixin",
+    "MinecraftMixin"
   ],
   "injectors": {
     "defaultRequire": 1
   }
-}   
+}
