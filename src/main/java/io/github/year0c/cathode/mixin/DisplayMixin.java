@@ -1,8 +1,8 @@
 package io.github.year0c.cathode.mixin;
 
-import org.lwjglx.LWJGLException;
-import org.lwjglx.opengl.DisplayMode;
-import org.lwjglx.opengl.PixelFormat;
+import org.lwjgl.LWJGLException;
+import org.lwjgl.opengl.DisplayMode;
+import org.lwjgl.opengl.PixelFormat;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 
@@ -11,17 +11,29 @@ import pl.tomgirl.pylon.window.DisplaySdl;
 import java.awt.Canvas;
 import java.nio.ByteBuffer;
 
-@Mixin(targets = "org.lwjglx.opengl.Display")
+@Mixin(targets = "org.lwjgl.opengl.Display")
 public class DisplayMixin {
 
     @Overwrite
     public static void create() throws LWJGLException {
-        DisplaySdl.instance().create(new PixelFormat());
+        try {
+            DisplaySdl.instance().create(new PixelFormat());
+            System.err.println("(SDL) Created.");
+        } catch (Exception e) {
+            System.err.println("(SDL) Failed to create: " + e.getMessage());
+            throw e instanceof LWJGLException ? (LWJGLException) e : new LWJGLException(e.getMessage());
+        }
     }
 
     @Overwrite
     public static void create(PixelFormat format) throws LWJGLException {
-        DisplaySdl.instance().create(format);
+        try {
+            DisplaySdl.instance().create(format);
+            System.err.println("(SDL) Created.");
+        } catch (Exception e) {
+            System.err.println("(SDL) Failed to create: " + e.getMessage());
+            throw e instanceof LWJGLException ? (LWJGLException) e : new LWJGLException(e.getMessage());
+        }
     }
 
     @Overwrite

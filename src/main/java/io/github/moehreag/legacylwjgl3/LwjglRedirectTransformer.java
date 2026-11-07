@@ -1,41 +1,63 @@
 package io.github.moehreag.legacylwjgl3;
 
 import net.minecraft.launchwrapper.IClassTransformer;
-
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.commons.ClassRemapper;
 import org.objectweb.asm.commons.Remapper;
 
-public class LwjglRedirectTransformer implements IClassTransformer {
+import java.lang.instrument.ClassFileTransformer;
+import java.security.ProtectionDomain;
 
-    private static final String FROM = "org/lwjgl/";
-    private static final String TO   = "org/lwjglx/";
-    private static final String SELF = "io/github/moehreag/legacylwjgl3/";
+public class LwjglRedirectTransformer implements IClassTransformer, ClassFileTransformer {
+
+    private static final String OLD_PB = "org/lwjgl/PointerBuffer";
+    private static final String NEW_PB = "org/lwjglx/PointerBuffer";
+
+    private static final String[] EXCLUDE = {
+        "java/",
+        "org/lwjglx/",
+        "pl/tomgirl/pylon/",
+        "io/github/year0c/cathode/",
+        "io/github/moehreag/legacylwjgl3/",
+        "uk/betacraft/legacyfix/",
+    };
 
     @Override
     public byte[] transform(String name, String fullName, byte[] classBytes) {
-        if (classBytes == null) return null;
-        if (fullName.startsWith(TO)) return classBytes;
-        if (fullName.startsWith("java/")) return classBytes;
-        if (fullName.startsWith("org/lwjgl/")) return classBytes;
-        if (fullName.startsWith(SELF)) return classBytes;
+        return doTransform(fullName, classBytes);
+    }
 
-        if (!containsRef(classBytes, FROM)) return classBytes;
+    @Override
+    public byte[] transform(ClassLoader loader, String className,
+                            Class<?> classBeingRedefined, ProtectionDomain pd,
+                            byte[] classfileBuffer) {
+        return doTransform(className, classfileBuffer);
+    }
+
+    private byte[] doTransform(String fullName, byte[] classBytes) {
+        if (classBytes == null) return null;
+
+        if (fullName.equals(OLD_PB)) return classBytes;
+        if (fullName.equals(NEW_PB)) return classBytes;
+
+        for (String prefix : EXCLUDE) {
+            if (fullName.startsWith(prefix)) return classBytes;
+        }
+
+        if (!containsRef(classBytes, OLD_PB)) return classBytes;
 
         Remapper remapper = new Remapper(Opcodes.ASM9) {
             @Override
             public String map(String internalName) {
-                if (internalName.startsWith(FROM)) {
-                    return TO + internalName.substring(FROM.length());
-                }
+                if (internalName.equals(OLD_PB)) return NEW_PB;
                 return internalName;
             }
         };
 
         ClassReader cr = new ClassReader(classBytes);
-        ClassWriter cw = new ClassWriter(cr, 0);
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);   
         cr.accept(new ClassRemapper(cw, remapper), 0);
         return cw.toByteArray();
     }

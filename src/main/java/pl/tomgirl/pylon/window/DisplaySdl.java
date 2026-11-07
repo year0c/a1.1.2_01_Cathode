@@ -1,12 +1,13 @@
 package pl.tomgirl.pylon.window;
 
-import org.lwjglx.LWJGLException;
-import org.lwjglx.opengl.DisplayMode;
-import org.lwjglx.opengl.PixelFormat;
+import org.lwjgl.opengl.GL;
+import org.lwjgl.LWJGLException;
+import org.lwjgl.opengl.DisplayMode;
+import org.lwjgl.opengl.PixelFormat;
 import org.lwjgl.sdl.*;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
-import org.lwjgl.opengl.GL;
+
 import java.lang.reflect.Constructor;
 
 import java.nio.ByteBuffer;
@@ -187,6 +188,7 @@ public class DisplaySdl {
     public void update() {
         swapBuffers();
         processMessages();
+        System.err.println("(SDL) active");
     }
 
     public void processMessages() {
@@ -247,9 +249,7 @@ public class DisplaySdl {
     }
 
     public void create(PixelFormat format) throws LWJGLException {
-        if (isCreated()) {
-            throw new IllegalStateException("Display has already been created");
-        }
+        if (isCreated()) return;
 
         initializeVideo();
 
@@ -261,11 +261,13 @@ public class DisplaySdl {
         long flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;   
         handle = SDL_CreateWindow(title, width, height, flags);
         if (handle == 0) {
+            System.err.println("(SDL) Failed to create: " + SDL_GetError());
             throw new LWJGLException("SDL_CreateWindow failed: " + SDL_GetError());
         }
 
         long context = SDL_GL_CreateContext(handle);
         if (context == 0) {
+            System.err.println("(SDL) Failed to create: " + SDL_GetError());
             SDL_DestroyWindow(handle);
             handle = -1;
             throw new LWJGLException("SDL_GL_CreateContext failed: " + SDL_GetError());
@@ -293,7 +295,7 @@ public class DisplaySdl {
         SDL_PumpEvents();
         focused = (SDL_GetWindowFlags(handle) & SDL_WINDOW_INPUT_FOCUS) != 0;
 
-        System.out.println("(SDL) Created.");
+        System.err.println("(SDL) Created.");
 
         GL.createCapabilities();
 

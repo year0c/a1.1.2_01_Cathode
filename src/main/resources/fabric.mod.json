@@ -7,12 +7,6 @@
   "authors": ["year0c"],
   "license": "LGPL-3.0",
   "entrypoints": {
-    "main": []
-  },
-  "custom": {
-    "fabric-loom": {
-      "preLaunch": "io.github.moehreag.legacylwjgl3.PreLaunch"
-    }
   },
   "mixins": [
     "cathode.mixin.json"
